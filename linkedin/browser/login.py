@@ -19,6 +19,9 @@ LINKEDIN_LOGIN_URL = "https://www.linkedin.com/login"
 LINKEDIN_FEED_URL = "https://www.linkedin.com/feed/"
 
 EMAIL_LOCATORS = [
+    lambda p: p.locator('input[autocomplete="username"]'),
+    lambda p: p.locator('input[autocomplete="username webauthn"]'),
+    lambda p: p.locator('input[type="email"]'),
     lambda p: p.get_by_role("textbox", name="Email or phone"),
     lambda p: p.get_by_label("Email or phone"),
     lambda p: p.locator('input[autocomplete="webauthn"]'),

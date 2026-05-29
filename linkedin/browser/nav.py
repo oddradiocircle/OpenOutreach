@@ -5,7 +5,7 @@ from urllib.parse import unquote, urlparse, urljoin
 
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from linkedin.conf import BROWSER_NAV_TIMEOUT_MS, DUMP_PAGES, FIXTURE_PAGES_DIR, HUMAN_TYPE_MIN_DELAY_MS, HUMAN_TYPE_MAX_DELAY_MS
+from linkedin.conf import BROWSER_NAV_TIMEOUT_MS, DIAGNOSTICS_DIR, DUMP_PAGES, FIXTURE_PAGES_DIR, HUMAN_TYPE_MIN_DELAY_MS, HUMAN_TYPE_MAX_DELAY_MS
 from linkedin.exceptions import SkipProfile
 
 logger = logging.getLogger(__name__)
@@ -76,6 +76,16 @@ def resolve_locator(page, candidates, timeout_per_ms: int = 5000):
             return locator
         except PlaywrightTimeoutError:
             continue
+    # Dump page HTML to help diagnose selector failures
+    try:
+        DIAGNOSTICS_DIR.mkdir(parents=True, exist_ok=True)
+        import re
+        safe = re.sub(r"[^\w.-]", "_", page.url)[:80]
+        dump_path = DIAGNOSTICS_DIR / f"locator_fail_{safe}.html"
+        dump_path.write_text(page.content(), encoding="utf-8")
+        logger.warning("Locator failure dump saved → %s", dump_path)
+    except Exception:
+        pass
     raise RuntimeError(f"No locator matched on {page.url}")
 
 
