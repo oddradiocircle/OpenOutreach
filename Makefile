@@ -22,9 +22,9 @@ test: ## run the test suite
 admin: ## start the Django Admin web server
 	@echo ""
 	@echo "  Django Admin: http://localhost:8000/admin/"
-	@echo "  No superuser yet? Run: python manage.py createsuperuser"
+	@echo "  No superuser yet? Run: .venv/bin/python manage.py createsuperuser"
 	@echo ""
-	python manage.py runserver
+	.venv/bin/python manage.py runserver
 
 # Docker targets
 logs: ## follow the logs of the service
