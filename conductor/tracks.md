@@ -4,6 +4,3 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [x] Track: Operational Health — Set up and verify the runtime
-
-_Link: [./tracks/ops_health_20260528/](./tracks/ops_health_20260528/)_
