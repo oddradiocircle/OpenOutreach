@@ -96,8 +96,7 @@ def status():
     campaigns = Campaign.objects.all()
     console.print("\n[bold]Campaigns[/bold]")
     for c in campaigns:
-        tag = " [dim][freemium][/dim]" if c.is_freemium else ""
-        console.print(f"  {c.name}{tag}")
+        console.print(f"  {c.name}")
 
     console.print("\n[bold]Deals by state[/bold]")
     rows = (
@@ -350,16 +349,16 @@ def campaign_list():
 
     t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
     t.add_column("Name")
-    t.add_column("Freemium", justify="center", width=9)
     t.add_column("Deals", justify="right", width=6)
     t.add_column("Booking link")
+    t.add_column("Website")
 
     for c in Campaign.objects.all():
         t.add_row(
             c.name,
-            "[dim]✓[/dim]" if c.is_freemium else "·",
             str(Deal.objects.filter(campaign=c).count()),
             c.booking_link or "[dim]—[/dim]",
+            c.website_url or "[dim]—[/dim]",
         )
     console.print(t)
 
@@ -374,7 +373,7 @@ def campaign_show(name: str = typer.Argument(..., help="Campaign name (partial m
     console.print(f"\n[bold]{c.name}[/bold]")
     console.print(f"[dim]objective[/dim]   {c.campaign_objective or '—'}")
     console.print(f"[dim]booking[/dim]     {c.booking_link or '—'}")
-    console.print(f"[dim]freemium[/dim]    {'yes' if c.is_freemium else 'no'}")
+    console.print(f"[dim]website[/dim]     {c.website_url or '—'}")
 
     console.print("\n[bold]Deals[/bold]")
     for r in Deal.objects.filter(campaign=c).values("state").annotate(n=Count("id")).order_by("state"):
@@ -391,7 +390,7 @@ def campaign_create(
     objective: str = typer.Option(..., prompt="Campaign objective"),
     booking: str = typer.Option(..., prompt="Booking link"),
     docs: str = typer.Option(..., prompt="Product docs"),
-    freemium: bool = typer.Option(False, "--freemium/--no-freemium"),
+    website: str = typer.Option("", "--website", help="Company website URL"),
 ):
     """Create a new campaign."""
     from linkedin.models import Campaign
@@ -406,7 +405,7 @@ def campaign_create(
         campaign_objective=objective,
         booking_link=booking,
         product_docs=docs,
-        is_freemium=freemium,
+        website_url=website,
     )
     # Add all existing users to the campaign
     for user in User.objects.all():
@@ -421,6 +420,7 @@ def campaign_update(
     objective: Optional[str] = typer.Option(None, "--objective"),
     booking: Optional[str] = typer.Option(None, "--booking"),
     docs: Optional[str] = typer.Option(None, "--docs"),
+    website: Optional[str] = typer.Option(None, "--website"),
     new_name: Optional[str] = typer.Option(None, "--name"),
 ):
     """Update campaign fields."""
@@ -429,13 +429,16 @@ def campaign_update(
 
     if objective is not None:
         c.campaign_objective = objective
-        changed.append("objective")
+        changed.append("campaign_objective")
     if booking is not None:
         c.booking_link = booking
         changed.append("booking_link")
     if docs is not None:
         c.product_docs = docs
         changed.append("product_docs")
+    if website is not None:
+        c.website_url = website
+        changed.append("website_url")
     if new_name is not None:
         c.name = new_name
         changed.append("name")

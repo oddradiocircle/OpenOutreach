@@ -182,9 +182,6 @@ def plan_connect_window(session, campaign) -> int:
     profile = session.linkedin_profile
     n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
 
-    if campaign.is_freemium:
-        n = int(n * campaign.action_fraction)
-
     created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n)
     if created:
         logger.info(

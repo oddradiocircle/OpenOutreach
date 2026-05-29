@@ -36,13 +36,16 @@ def _text_function_model(text: str) -> FunctionModel:
 
 def _capturing_function_model(captured: dict, output: dict) -> FunctionModel:
     """FunctionModel that records the messages it receives, then yields *output*."""
+    import json as _json
     from pydantic_ai.messages import ToolCallPart
 
     def _respond(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
         captured["messages"] = messages
         captured["output_tools"] = info.output_tools
-        tool_name = info.output_tools[0].name if info.output_tools else "final_result"
-        return ModelResponse(parts=[ToolCallPart(tool_name=tool_name, args=output)])
+        if info.output_tools:
+            tool_name = info.output_tools[0].name
+            return ModelResponse(parts=[ToolCallPart(tool_name=tool_name, args=output)])
+        return ModelResponse(parts=[TextPart(content=_json.dumps(output))])
 
     return FunctionModel(_respond)
 

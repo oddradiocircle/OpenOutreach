@@ -25,6 +25,9 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
     """
     from crm.models import Lead
 
+    if qualifier is None:
+        return 0
+
     profiles = get_qualified_profiles(session)
     if not profiles:
         return 0
@@ -59,6 +62,9 @@ def promote_to_ready(session, qualifier: BayesianQualifier, threshold: float) ->
 
 def find_ready_candidate(session, qualifier: BayesianQualifier) -> dict | None:
     """Return the top-ranked READY_TO_CONNECT profile, or None."""
+    if qualifier is None:
+        return None
+
     profiles = get_ready_to_connect_profiles(session)
     if not profiles:
         return None

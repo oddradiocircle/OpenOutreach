@@ -32,19 +32,8 @@ class ConnectStrategy:
 
 
 def strategy_for(campaign, qualifiers):
-    """Build the right ConnectStrategy based on campaign type."""
+    """Build the ConnectStrategy for the campaign."""
     qualifier = qualifiers.get(campaign.pk)
-
-    if campaign.is_freemium:
-        from linkedin.db.deals import create_freemium_deal
-        from linkedin.pipeline.freemium_pool import find_freemium_candidate
-
-        return ConnectStrategy(
-            find_candidate=lambda s: find_freemium_candidate(s, qualifier),
-            pre_connect=lambda s, pid: create_freemium_deal(s, pid),
-            qualifier=qualifier,
-        )
-
     from linkedin.pipeline.pools import find_candidate
 
     return ConnectStrategy(
@@ -61,6 +50,10 @@ def handle_connect(task, session, qualifiers):
     campaign = session.campaign
     strategy = strategy_for(campaign, qualifiers)
 
+    if strategy.qualifier is None:
+        logger.warning("[%s] connect: no qualifier available — slot skipped", campaign)
+        return
+
     if not session.linkedin_profile.can_execute(ActionLog.ActionType.CONNECT):
         logger.info("[%s] connect: daily limit reached — slot skipped", campaign)
         return
@@ -72,10 +65,6 @@ def handle_connect(task, session, qualifiers):
 
     public_id = candidate["public_identifier"]
     profile = candidate.get("profile") or candidate
-
-    # Freemium campaigns need a Deal before set_profile_state
-    if strategy.pre_connect:
-        strategy.pre_connect(session, public_id)
 
     from crm.models import Deal
 

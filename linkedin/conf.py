@@ -65,7 +65,7 @@ CAMPAIGN_CONFIG = {
     "check_pending_recheck_after_hours": 24,
     "min_action_interval": 120,
     "qualification_n_mc_samples": 100,
-    "min_ready_to_connect_prob": 0.9,
+    "min_ready_to_connect_prob": 0.85,
     "min_positive_pool_prob": 0.20,
     "embedding_model": "BAAI/bge-small-en-v1.5",
     "enrich_min_delay_seconds": 6,

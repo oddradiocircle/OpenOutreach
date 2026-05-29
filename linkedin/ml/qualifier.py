@@ -442,35 +442,3 @@ class BayesianQualifier:
             self._fit_if_needed()
 
 
-# ---------------------------------------------------------------------------
-# KitQualifier  (pre-trained kit model for freemium campaigns)
-# ---------------------------------------------------------------------------
-
-class KitQualifier:
-    """Qualifier for freemium campaigns backed by a pre-trained GPR kit model.
-
-    Wraps a Pipeline(StandardScaler, GPR) loaded from a campaign kit.
-    Ranks by raw GP mean and exposes posterior stats for explanation.
-    """
-
-    def __init__(self, kit_model):
-        self._model = kit_model
-
-    def rank_profiles(self, profiles: list, session) -> list:
-        """Rank profiles by raw model score (descending), skipping missing embeddings."""
-        if not profiles:
-            return []
-        return _rank_by_score(profiles, self._model, session, skip_missing=True)
-
-    def explain(self, profile: dict, session) -> str:
-        """Human-readable compact scoring explanation."""
-        from crm.models import Lead
-
-        lead = Lead.objects.filter(pk=profile.get("lead_id")).first()
-        emb = lead.get_embedding(session) if lead else None
-        if emb is None:
-            return "No embedding found for profile"
-        mean, std = _gpr_predict(self._model, emb)
-        gp_mean = float(mean[0])
-        p_above = float(_prob_above_half(mean, std)[0])
-        return f"mean={gp_mean:.3f}, P(f>0.5)={p_above:.3f}"

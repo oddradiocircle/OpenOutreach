@@ -19,7 +19,7 @@ class Command(BaseCommand):
         if not campaigns:
             self.stdout.write("  (none)")
         for c in campaigns:
-            self.stdout.write(f"  {'[freemium] ' if c.is_freemium else ''}{ c.name}")
+            self.stdout.write(f"  {c.name}")
 
         # --- Deals by state --------------------------------------------------
         self.stdout.write(self._header("Deals"))

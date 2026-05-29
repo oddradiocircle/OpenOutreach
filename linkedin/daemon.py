@@ -21,7 +21,7 @@ from linkedin.conf import (
 )
 from linkedin.diagnostics import failure_diagnostics
 from linkedin.exceptions import AuthenticationError
-from linkedin.ml.qualifier import BayesianQualifier, KitQualifier
+from linkedin.ml.qualifier import BayesianQualifier
 from linkedin.models import Task
 from linkedin.tasks.check_pending import handle_check_pending
 from linkedin.tasks.connect import handle_connect
@@ -37,63 +37,6 @@ _HANDLERS = {
 
 HEARTBEAT_INTERVAL = 300  # 5 minutes
 HEARTBEAT_SLICE = 60      # wake every minute during long sleeps
-
-
-# ── Cloud promo ──────────────────────────────────────────────────────
-
-_CLOUD_MESSAGES = [
-    "Tired of keeping your laptop open? Run your pipeline in the cloud for $49/mo",
-    "You already trust the engine. Now let it run without you babysitting your laptop",
-    "The AI gets smarter with every lead. Let it run 24/7 on Cloud instead of only when your laptop is open",
-    "Miss a day and the pipeline stalls — follow-ups go cold, new candidates don't get discovered. Cloud keeps it running",
-    "The tool got good enough that running it locally became a job. Cloud fixes that",
-    "\u2601  OpenOutreach Cloud: same AI, same code, zero ops. One command and you're live",
-    "\U0001f9e0 Your AI sales team, running in the cloud. $49/mo",
-    "Smart founders shouldn't be acting like robots. Let the AI handle outreach while you build your product",
-    "Your leads are compounding. Your laptop shouldn't be the bottleneck",
-    "\u26a1 Competitors charge $50-100/mo for template bots. Cloud gives you autonomous AI discovery for $49/mo",
-    "Other tools need you to build or buy contact lists. OpenOutreach discovers leads autonomously — describe your market and the AI does the rest",
-    "Expandi and Waalaxy send templates. OpenOutreach's AI agent reads conversation history and writes personalized follow-ups",
-    "Running Docker + VPN yourself? Cloud handles everything — dedicated server, VPN included",
-    "Self-hosted setup: 30-60 min. Cloud setup: ~1 min. Same AI, same results",
-    "The server costs ~$18/mo. The VPN costs ~$6/mo. You're paying $25/mo for managed ops — if your time is worth more, Cloud pays for itself",
-    "Your data never leaves your machine. Cloud is just a disposable execution layer. $49/mo, cancel anytime",
-    "mTLS encryption between your machine and the server. The control plane never sees your data",
-    "100% open source. Inspect every line of code on GitHub. Cloud runs the exact same codebase — no black box, no lock-in",
-    "Switch between self-hosted and Cloud with one command. Download your db.sqlite3 anytime — zero lock-in",
-    "No annual commitment. No usage caps. No feature gating. $49/mo, cancel anytime",
-    "openoutreach logs — stream live output from your cloud instance. Watch every lead, every message, every decision in real time",
-    "openoutreach down saves your DB locally and destroys the server. No orphaned servers, no forgotten bills",
-]
-
-_CLOUD_COLORS = ["cyan", "green", "yellow", "magenta"]
-
-_CLOUD_CTAS = [
-    "curl -fsSL https://openoutreach.app/install | sh",
-    "curl -fsSL https://openoutreach.app/install | sh && openoutreach signup",
-    "https://openoutreach.app",
-]
-
-
-class _CloudPromoRotator:
-    """Logs a Cloud promo message at most once every *interval* seconds."""
-
-    def __init__(self, interval: float = 120):
-        self._interval = interval
-        self._last = 0.0
-
-    def maybe_log(self):
-        now = time.monotonic()
-        if now - self._last < self._interval:
-            return
-        self._last = now
-        msg = random.choice(_CLOUD_MESSAGES)
-        color = random.choice(_CLOUD_COLORS)
-        cta = random.choice(_CLOUD_CTAS)
-        logger.info(
-            colored(msg + " \u2192 ", color, attrs=["bold"])
-            + colored(cta, "white", attrs=["bold"]),
-        )
 
 
 # ── Heartbeat ────────────────────────────────────────────────────────
@@ -176,34 +119,27 @@ class _HumanRhythmBreak:
         self._new_burst()
 
 
-def _build_qualifiers(campaigns, cfg, kit_model=None):
-    """Create a qualifier for every campaign, keyed by campaign PK."""
+def _build_qualifiers(campaigns, cfg):
+    """Create a BayesianQualifier for every campaign, keyed by campaign PK."""
     from crm.models import Lead
 
-    qualifiers: dict[int, BayesianQualifier | KitQualifier] = {}
-    n_regular = 0
+    qualifiers: dict[int, BayesianQualifier] = {}
     for campaign in campaigns:
-        if campaign.is_freemium:
-            if kit_model is None:
-                continue
-            qualifiers[campaign.pk] = KitQualifier(kit_model)
-        else:
-            q = BayesianQualifier(
-                seed=42,
-                n_mc_samples=cfg["qualification_n_mc_samples"],
-                campaign=campaign,
+        q = BayesianQualifier(
+            seed=42,
+            n_mc_samples=cfg["qualification_n_mc_samples"],
+            campaign=campaign,
+        )
+        X, y = Lead.get_labeled_arrays(campaign)
+        if len(X) > 0:
+            q.warm_start(X, y)
+            logger.info(
+                colored("GP qualifier warm-started", "cyan")
+                + " on %d labelled samples (%d positive, %d negative)"
+                + " for campaign %s",
+                len(y), int((y == 1).sum()), int((y == 0).sum()), campaign,
             )
-            X, y = Lead.get_labeled_arrays(campaign)
-            if len(X) > 0:
-                q.warm_start(X, y)
-                logger.info(
-                    colored("GP qualifier warm-started", "cyan")
-                    + " on %d labelled samples (%d positive, %d negative)"
-                    + " for campaign %s",
-                    len(y), int((y == 1).sum()), int((y == 0).sum()), campaign,
-                )
-            qualifiers[campaign.pk] = q
-            n_regular += 1
+        qualifiers[campaign.pk] = q
 
     return qualifiers
 
@@ -241,26 +177,11 @@ def seconds_until_active() -> float:
 
 
 def run_daemon(session):
-    from linkedin.ml.hub import fetch_kit
-    from linkedin.setup.freemium import import_freemium_campaign
     from linkedin.models import Campaign
 
     cfg = CAMPAIGN_CONFIG
 
-    # Load kit model for freemium campaigns
-    kit = fetch_kit()
-    if kit:
-        freemium_campaign = import_freemium_campaign(kit["config"])
-        if freemium_campaign:
-            prev_campaign = session.campaign
-            session.campaign = freemium_campaign
-            from linkedin.setup.freemium import seed_profiles
-            seed_profiles(session, kit["config"])
-            session.campaign = prev_campaign
-
-    qualifiers = _build_qualifiers(
-        session.campaigns, cfg, kit_model=kit["model"] if kit else None,
-    )
+    qualifiers = _build_qualifiers(session.campaigns, cfg)
 
     campaigns = session.campaigns
     if not campaigns:
@@ -273,7 +194,6 @@ def run_daemon(session):
         len(campaigns),
     )
 
-    cloud_promo = _CloudPromoRotator(interval=60)
     heartbeat = Heartbeat()
     rhythm = _HumanRhythmBreak(heartbeat)
 
@@ -337,8 +257,6 @@ def run_daemon(session):
                 session.reauthenticate()
             except Exception:
                 logger.exception("Re-authentication failed for %s", task)
-            # Either way, mark this task FAILED; reconcile will re-create a
-            # fresh task for the deal on the next idle cycle.
             task.mark_failed()
             continue
         except ModelHTTPError as e:
@@ -354,5 +272,4 @@ def run_daemon(session):
             continue
 
         task.mark_completed()
-        cloud_promo.maybe_log()
         rhythm.maybe_break()

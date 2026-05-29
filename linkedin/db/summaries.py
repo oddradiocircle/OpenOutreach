@@ -43,7 +43,8 @@ Rules:
   says "yes", use the preceding [Me] message to understand what they agreed
   to). Never extract facts about what [Me] said, offered, or asked.
 
-Output a JSON object matching the schema you have been given.
+Output ONLY a JSON object with this exact shape (no markdown, no prose):
+{"facts": ["Fact one.", "Fact two."]}
 """
 
 
@@ -66,15 +67,6 @@ def seller_name_from(session) -> str:
     """Return the seller's first name as known to the LLM, with a username fallback."""
     sp = session.self_profile
     return (sp.get("first_name") or "").strip() or session.django_user.username
-
-
-class FactList(BaseModel):
-    """Structured LLM output for fact extraction."""
-
-    facts: list[str] = Field(
-        default_factory=list,
-        description="Atomic, self-contained factual statements extracted from the input text.",
-    )
 
 
 class _MemoryAction(BaseModel):
@@ -119,11 +111,18 @@ def extract_facts(
     agent = Agent(
         get_llm_model(),
         system_prompt=system,
-        output_type=FactList,
         model_settings={"temperature": 0.0, "timeout": 60},
     )
-    result: FactList = run_agent_sync(agent.run(text)).output
-    return list(result.facts)
+    raw: str = run_agent_sync(agent.run(text)).output
+    try:
+        data = json.loads(remove_code_blocks(raw), strict=False)
+    except (json.JSONDecodeError, ValueError):
+        try:
+            data = json.loads(extract_json(raw), strict=False)
+        except (json.JSONDecodeError, ValueError):
+            logger.warning("extract_facts: could not parse LLM response as JSON — returning []")
+            return []
+    return [str(f) for f in (data.get("facts") or []) if f]
 
 
 # ── Profile summary ──

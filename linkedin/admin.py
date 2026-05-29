@@ -19,13 +19,13 @@ class SiteConfigAdmin(admin.ModelAdmin):
 
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
-    list_display = ("name", "booking_link", "is_freemium", "action_fraction")
+    list_display = ("name", "booking_link", "website_url")
     filter_horizontal = ("users",)
 
 
 @admin.register(LinkedInProfile)
 class LinkedInProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "linkedin_username", "active", "legal_accepted")
+    list_display = ("user", "linkedin_username", "contact_email", "active", "legal_accepted")
     list_filter = ("active",)
     raw_id_fields = ("user", "self_lead")
 
