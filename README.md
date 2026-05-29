@@ -135,7 +135,15 @@ make run
 ```
 The interactive onboarding will prompt for LinkedIn credentials, LLM API key, and campaign details on first run. Fully resumable — stop/restart anytime without losing progress.
 
-### 3. View Your Data (CRM Admin)
+### 3. Check System Status
+
+```bash
+python manage.py status
+```
+
+Prints a live summary of campaigns, deals by state, task queue (with next scheduled action), and today's activity — useful for a quick health check without opening the browser.
+
+### 4. View Your Data (CRM Admin)
 
 OpenOutreach includes a full CRM web interface powered by DjangoCRM:
 ```bash
