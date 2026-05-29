@@ -14,14 +14,13 @@ from typing import Callable
 from termcolor import colored
 
 from linkedin.db.deals import increment_connect_attempts, set_profile_state
-from linkedin.db.leads import disqualify_lead
 from linkedin.models import ActionLog
 from linkedin.enums import ProfileState
 from linkedin.exceptions import ProfileInaccessibleError, ReachedConnectionLimit, SkipProfile
 
 logger = logging.getLogger(__name__)
 
-MAX_CONNECT_ATTEMPTS = 3
+MAX_CONNECT_ATTEMPTS = 6
 
 
 @dataclass
@@ -90,13 +89,14 @@ def handle_connect(task, session, qualifiers):
         new_state = send_connection_request(session=session, profile=profile)
 
         if new_state == ProfileState.QUALIFIED:
-            # No Connect button found — track attempt, disqualify after MAX_CONNECT_ATTEMPTS
+            # No Connect button found — could be a transient network failure.
+            # Track attempts and give up on this campaign after MAX_CONNECT_ATTEMPTS,
+            # but never globally disqualify: Lead.disqualified is reserved for ICP mismatches.
             attempts = increment_connect_attempts(session, public_id)
             if attempts >= MAX_CONNECT_ATTEMPTS:
                 reason = f"Unreachable: no Connect button after {attempts} attempts"
-                disqualify_lead(public_id)
                 set_profile_state(session, public_id, ProfileState.FAILED.value, reason=reason)
-                logger.warning("Disqualified %s — %s", public_id, reason)
+                logger.warning("No Connect button for %s after %d attempts — marking FAILED (not disqualified)", public_id, attempts)
             else:
                 set_profile_state(session, public_id, new_state.value)
                 logger.debug("%s: connect attempt %d/%d — no button found", public_id, attempts, MAX_CONNECT_ATTEMPTS)
