@@ -7,7 +7,7 @@
 - [x] Task 1.3: Install Playwright browsers (`.venv/bin/playwright install --with-deps chromium`)
 - [x] Task 1.4: Run Django migrations (`.venv/bin/python manage.py migrate --no-input`)
 - [x] Task 1.5: Bootstrap CRM (`.venv/bin/python manage.py setup_crm`)
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Environment Setup' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Environment Setup' (Protocol in workflow.md)
 
 ## Phase 2: Verification
 
