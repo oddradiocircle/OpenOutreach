@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openoutreach-local"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[project.scripts]
+oo = "oo_cli:app"
+
+[tool.setuptools]
+py-modules = ["oo_cli"]
