@@ -11,7 +11,7 @@
 
 ## Phase 2: Verification
 
-- [ ] Task 2.1: Run test suite (`.venv/bin/pytest`) and document results
+- [x] Task 2.1: Run test suite (`.venv/bin/pytest`) and document results
 - [ ] Task 2.2: Start Django Admin and confirm it loads (`make admin`)
 - [ ] Task 2.3: Start daemon and confirm it enters the task loop without crashing (`make run`)
 - [ ] Task: Conductor - User Manual Verification 'Phase 2: Verification' (Protocol in workflow.md)
