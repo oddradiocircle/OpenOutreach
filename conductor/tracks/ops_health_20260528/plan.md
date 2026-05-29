@@ -1,6 +1,6 @@
 # Plan: Operational Health — Set up and verify the runtime
 
-## Phase 1: Environment Setup
+## Phase 1: Environment Setup [checkpoint: fb5f00d]
 
 - [x] Task 1.1: Create Python virtual environment (`uv venv`)
 - [x] Task 1.2: Install dependencies (`uv pip install -r requirements/local.txt`)
