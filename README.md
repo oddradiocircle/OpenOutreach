@@ -154,7 +154,9 @@ python manage.py createsuperuser
 make admin
 ```
 Then open:
-- **Django Admin:** http://localhost:8000/admin/
+- **Django Admin:** http://localhost:8001/admin/
+
+> If port 8001 is also taken, pass any free port: `.venv/bin/python manage.py runserver 8002`
 
 ---
 ## ✨ Features
