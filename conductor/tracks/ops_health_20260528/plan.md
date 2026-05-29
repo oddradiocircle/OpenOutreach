@@ -9,7 +9,7 @@
 - [x] Task 1.5: Bootstrap CRM (`.venv/bin/python manage.py setup_crm`)
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Environment Setup' (Protocol in workflow.md)
 
-## Phase 2: Verification
+## Phase 2: Verification [checkpoint: fba557d]
 
 - [x] Task 2.1: Run test suite (`.venv/bin/pytest`) and document results
 - [x] Task 2.2: Start Django Admin and confirm it loads (`make admin`)
