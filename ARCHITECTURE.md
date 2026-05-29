@@ -24,6 +24,24 @@ Docker `start` script handles only Xvfb/VNC setup, then `exec python manage.py r
 - `onboard` — standalone onboarding (interactive or `--non-interactive` with `--config-file` / individual flags).
 - `setup_crm` — idempotent CRM bootstrap (default Site).
 - `add_seeds` — add seed LinkedIn profile URLs to a campaign.
+- `status` — prints a live summary: campaigns, deals by state, task queue (next scheduled action), and today's ActionLog counts.
+- `crm` — rich-table CRM browser. Subcommands: `leads`, `deals`, `deal <id>`. Reads only; mutations are in the `oo` CLI.
+
+## `oo` CLI (`oo_cli.py`)
+
+Installable local CLI (`pip install -e .`, entry point `oo`). Bootstraps Django via `django.setup()` at startup, then delegates to ORM queries directly — no subprocess calls to `manage.py`.
+
+Subcommand groups:
+
+| Group | Commands |
+|---|---|
+| *(root)* | `status`, `run`, `admin [port]` |
+| `crm` | `leads`, `disqualify`, `requalify`, `deals`, `deal`, `set-state`, `set-outcome` |
+| `campaign` | `list`, `show`, `create`, `update`, `delete` |
+| `keyword` | `list`, `add`, `delete` |
+| `task` | `list`, `cancel` |
+
+`campaign create` prompts interactively and adds all existing Django users to the new campaign's M2M. `campaign delete` and `keyword delete` require `--yes / -y` or interactive confirmation. `set-state` / `set-outcome` validate against `ProfileState` / `Outcome` enum values (case-insensitive).
 
 ## Onboarding (`onboarding.py`)
 
@@ -71,6 +89,10 @@ GPR (sklearn, ConstantKernel * RBF) inside Pipeline(StandardScaler, GPR) with BA
 3. **READY_TO_CONNECT gate** — P(f > 0.5) above `min_ready_to_connect_prob` (0.9) promotes QUALIFIED → READY_TO_CONNECT.
 
 384-dim FastEmbed embeddings stored directly on Lead model, per-campaign GP models at ``Campaign.model_blob` (BinaryField, joblib-dumped with `compress=3`)`. Cold start returns None until >=2 labels of both classes.
+
+## Django Admin (`crm/admin.py`)
+
+`Lead` and `Deal` are registered with read-only fieldsets (all fields `readonly_fields`). `LeadAdmin` adds an `has_embedding` boolean column. `DealAdmin` is filterable by `state`, `outcome`, and `campaign`, with a `date_hierarchy` on `creation_date`. Access at `/admin/` (run via `oo admin` or `make admin`, default port 8001).
 
 ## Django Apps
 

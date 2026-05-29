@@ -135,35 +135,59 @@ make run
 ```
 The interactive onboarding will prompt for LinkedIn credentials, LLM API key, and campaign details on first run. Fully resumable — stop/restart anytime without losing progress.
 
-### 3. Check System Status and Browse CRM
+### 3. Install the `oo` CLI
+
+`oo` is a local CLI for managing campaigns, leads, deals, tasks, and keywords — installed as part of the project:
 
 ```bash
-# System overview (campaigns, task queue, activity today)
-python manage.py status
-
-# Browse CRM data with rich tables
-python manage.py crm leads                        # all leads
-python manage.py crm leads --disqualified         # disqualified only
-python manage.py crm deals                        # all deals
-python manage.py crm deals --state connected      # filter by state
-python manage.py crm deals --campaign "Skemática" # filter by campaign
-python manage.py crm deal 42                      # full detail for deal #42
+pip install -e .
 ```
+
+```
+oo status                                   # system overview
+oo run                                      # start the daemon
+oo admin [port]                             # start Django Admin (default port 8001)
+
+oo crm leads [--disqualified]              # list leads
+oo crm disqualify <id>                     # permanently exclude a lead
+oo crm requalify <id>                      # remove exclusion
+oo crm deals [--state X] [--campaign X]   # list deals
+oo crm deal <id>                           # full detail: reason, summaries, messages
+oo crm set-state <id> <state>             # manually update deal state
+oo crm set-outcome <id> <outcome>         # manually update deal outcome
+
+oo campaign list                           # list all campaigns
+oo campaign show <name>                    # show details + deal breakdown
+oo campaign create                         # interactive creation prompt
+oo campaign update <name> [--objective X] [--booking X] [--docs X] [--name X]
+oo campaign delete <name> [-y]
+
+oo keyword list [--campaign X]             # list search keywords
+oo keyword add <campaign> <keyword>        # add a keyword to a campaign
+oo keyword delete <id> [-y]
+
+oo task list [--status X] [--limit N]     # inspect the task queue
+oo task cancel <id>                        # cancel a pending task
+```
+
+Valid states: `Qualified`, `Ready to Connect`, `Pending`, `Connected`, `Completed`, `Failed`
+Valid outcomes: `converted`, `not_interested`, `wrong_fit`, `no_budget`, `has_solution`, `bad_timing`, `unresponsive`, `unknown`
 
 ### 4. View Your Data (CRM Admin)
 
-OpenOutreach includes a full CRM web interface powered by DjangoCRM:
+OpenOutreach includes a full web CRM powered by Django Admin, with views for Leads, Deals, Campaigns, Tasks, Keywords, and Messages:
+
 ```bash
 # Create an admin account (first time only)
-python manage.py createsuperuser
+.venv/bin/python manage.py createsuperuser
 
-# Start the web server
+# Start the web server (or use: oo admin)
 make admin
 ```
-Then open:
-- **Django Admin:** http://localhost:8001/admin/
 
-> If port 8001 is also taken, pass any free port: `.venv/bin/python manage.py runserver 8002`
+Then open **http://localhost:8001/admin/**
+
+> If port 8001 is in use, pass any free port: `oo admin 8002`
 
 ---
 ## ✨ Features

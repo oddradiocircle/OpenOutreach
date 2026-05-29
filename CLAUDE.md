@@ -23,7 +23,17 @@ make build / make up / make stop / make logs / make up-view
 # Local dev
 make setup    # install deps + browsers + migrate + bootstrap CRM
 make run      # run daemon
-make admin    # Django Admin at localhost:8000/admin/
+make admin    # Django Admin at localhost:8001/admin/
+
+# oo CLI (install once with: pip install -e .)
+oo status                                   # system overview
+oo run / oo admin [port]                    # daemon / admin server
+oo crm leads / deals / deal <id>           # read CRM
+oo crm disqualify/requalify <id>           # lead ops
+oo crm set-state/set-outcome <id> <val>   # deal ops
+oo campaign list/show/create/update/delete
+oo keyword list/add/delete
+oo task list/cancel
 
 # Testing
 make test / make docker-test
