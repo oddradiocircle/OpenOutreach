@@ -2,9 +2,9 @@
 import os
 import sys
 from pathlib import Path
+from typing import Optional
 
 import typer
-from typing import Optional
 
 # Bootstrap Django before any ORM import
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "linkedin.django_settings")
@@ -19,27 +19,30 @@ console = Console(highlight=False)
 
 app = typer.Typer(
     name="oo",
-    help="OpenOutreach local CLI — manage campaigns, leads, deals, and tasks.",
+    help="OpenOutreach local CLI — manage campaigns, leads, deals, tasks, and keywords.",
     no_args_is_help=True,
     add_completion=False,
 )
-crm_app = typer.Typer(help="Browse CRM data.", no_args_is_help=True)
+crm_app = typer.Typer(help="Browse and edit CRM data.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaigns.", no_args_is_help=True)
 task_app = typer.Typer(help="Inspect the task queue.", no_args_is_help=True)
+keyword_app = typer.Typer(help="Manage search keywords.", no_args_is_help=True)
 
 app.add_typer(crm_app, name="crm")
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(task_app, name="task")
+app.add_typer(keyword_app, name="keyword")
 
 # ── colour maps ────────────────────────────────────────────────────────────────
+# Keys match ProfileState.value ("Qualified", "Ready to Connect", …)
 
 STATE_COLOR = {
-    "qualified": "cyan",
-    "ready_to_connect": "blue",
-    "pending": "yellow",
-    "connected": "green",
-    "completed": "bright_green",
-    "failed": "red",
+    "Qualified": "cyan",
+    "Ready to Connect": "blue",
+    "Pending": "yellow",
+    "Connected": "green",
+    "Completed": "bright_green",
+    "Failed": "red",
 }
 OUTCOME_COLOR = {
     "converted": "bright_green",
@@ -52,6 +55,8 @@ OUTCOME_COLOR = {
     "unknown": "dim",
     "": "dim",
 }
+VALID_STATES = list(STATE_COLOR.keys())
+VALID_OUTCOMES = [k for k in OUTCOME_COLOR if k]
 
 
 def _sc(state: str) -> str:
@@ -62,6 +67,18 @@ def _sc(state: str) -> str:
 def _oc(outcome: str) -> str:
     c = OUTCOME_COLOR.get(outcome, "dim")
     return f"[{c}]{outcome or '—'}[/{c}]"
+
+
+def _get_campaign(name: str):
+    from linkedin.models import Campaign
+    try:
+        return Campaign.objects.get(name__icontains=name)
+    except Campaign.DoesNotExist:
+        console.print(f"[red]No campaign matching '{name}'[/red]")
+        raise typer.Exit(1)
+    except Campaign.MultipleObjectsReturned:
+        console.print(f"[yellow]Multiple campaigns match '{name}' — be more specific[/yellow]")
+        raise typer.Exit(1)
 
 
 # ── status ─────────────────────────────────────────────────────────────────────
@@ -163,6 +180,34 @@ def crm_leads(disqualified: bool = typer.Option(False, "--disqualified", help="S
     console.print(f"[dim]{qs.count()} leads[/dim]\n")
 
 
+@crm_app.command("disqualify")
+def crm_disqualify(lead_id: int = typer.Argument(..., help="Lead ID")):
+    """Permanently disqualify a lead (excluded from all campaigns)."""
+    from crm.models.lead import Lead
+    try:
+        lead = Lead.objects.get(pk=lead_id)
+    except Lead.DoesNotExist:
+        console.print(f"[red]Lead {lead_id} not found[/red]")
+        raise typer.Exit(1)
+    lead.disqualified = True
+    lead.save(update_fields=["disqualified"])
+    console.print(f"[yellow]Lead {lead_id} ({lead.public_identifier}) disqualified[/yellow]")
+
+
+@crm_app.command("requalify")
+def crm_requalify(lead_id: int = typer.Argument(..., help="Lead ID")):
+    """Remove disqualification from a lead."""
+    from crm.models.lead import Lead
+    try:
+        lead = Lead.objects.get(pk=lead_id)
+    except Lead.DoesNotExist:
+        console.print(f"[red]Lead {lead_id} not found[/red]")
+        raise typer.Exit(1)
+    lead.disqualified = False
+    lead.save(update_fields=["disqualified"])
+    console.print(f"[green]Lead {lead_id} ({lead.public_identifier}) requalified[/green]")
+
+
 # ── crm: deals ────────────────────────────────────────────────────────────────
 
 @crm_app.command("deals")
@@ -183,7 +228,7 @@ def crm_deals(
     t.add_column("ID", style="dim", width=5)
     t.add_column("Lead", max_width=24, no_wrap=True)
     t.add_column("Campaign", max_width=28, no_wrap=True)
-    t.add_column("State", width=16, no_wrap=True)
+    t.add_column("State", width=18, no_wrap=True)
     t.add_column("Outcome", width=14, no_wrap=True)
     t.add_column("Updated", width=11, no_wrap=True)
 
@@ -199,8 +244,6 @@ def crm_deals(
     console.print(t)
     console.print(f"[dim]{qs.count()} deals[/dim]\n")
 
-
-# ── crm: deal detail ──────────────────────────────────────────────────────────
 
 @crm_app.command("deal")
 def crm_deal(deal_id: int = typer.Argument(..., help="Deal ID")):
@@ -247,6 +290,56 @@ def crm_deal(deal_id: int = typer.Argument(..., help="Deal ID")):
     console.print()
 
 
+@crm_app.command("set-state")
+def crm_set_state(
+    deal_id: int = typer.Argument(..., help="Deal ID"),
+    state: str = typer.Argument(..., help=f"New state: {', '.join(VALID_STATES)}"),
+):
+    """Update the state of a deal."""
+    from crm.models.deal import Deal
+
+    matched = next((s for s in VALID_STATES if s.lower() == state.lower()), None)
+    if not matched:
+        console.print(f"[red]Invalid state '{state}'. Valid: {', '.join(VALID_STATES)}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        deal = Deal.objects.select_related("lead").get(pk=deal_id)
+    except Deal.DoesNotExist:
+        console.print(f"[red]Deal {deal_id} not found[/red]")
+        raise typer.Exit(1)
+
+    old = deal.state
+    deal.state = matched
+    deal.save(update_fields=["state"])
+    console.print(f"Deal {deal_id} ({deal.lead.public_identifier}): {_sc(old)} → {_sc(matched)}")
+
+
+@crm_app.command("set-outcome")
+def crm_set_outcome(
+    deal_id: int = typer.Argument(..., help="Deal ID"),
+    outcome: str = typer.Argument(..., help=f"New outcome: {', '.join(VALID_OUTCOMES)}"),
+):
+    """Update the outcome of a deal."""
+    from crm.models.deal import Deal
+
+    matched = next((o for o in VALID_OUTCOMES if o.lower() == outcome.lower()), None)
+    if not matched:
+        console.print(f"[red]Invalid outcome '{outcome}'. Valid: {', '.join(VALID_OUTCOMES)}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        deal = Deal.objects.select_related("lead").get(pk=deal_id)
+    except Deal.DoesNotExist:
+        console.print(f"[red]Deal {deal_id} not found[/red]")
+        raise typer.Exit(1)
+
+    old = deal.outcome
+    deal.outcome = matched
+    deal.save(update_fields=["outcome"])
+    console.print(f"Deal {deal_id} ({deal.lead.public_identifier}): outcome {_oc(old)} → {_oc(matched)}")
+
+
 # ── campaign ──────────────────────────────────────────────────────────────────
 
 @campaign_app.command("list")
@@ -254,21 +347,18 @@ def campaign_list():
     """List all campaigns."""
     from linkedin.models import Campaign
     from crm.models.deal import Deal
-    from django.db.models import Count
 
-    campaigns = Campaign.objects.all()
     t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
     t.add_column("Name")
     t.add_column("Freemium", justify="center", width=9)
     t.add_column("Deals", justify="right", width=6)
     t.add_column("Booking link")
 
-    for c in campaigns:
-        deal_count = Deal.objects.filter(campaign=c).count()
+    for c in Campaign.objects.all():
         t.add_row(
             c.name,
             "[dim]✓[/dim]" if c.is_freemium else "·",
-            str(deal_count),
+            str(Deal.objects.filter(campaign=c).count()),
             c.booking_link or "[dim]—[/dim]",
         )
     console.print(t)
@@ -277,19 +367,10 @@ def campaign_list():
 @campaign_app.command("show")
 def campaign_show(name: str = typer.Argument(..., help="Campaign name (partial match)")):
     """Show campaign details and deal breakdown."""
-    from linkedin.models import Campaign
     from crm.models.deal import Deal
     from django.db.models import Count
 
-    try:
-        c = Campaign.objects.get(name__icontains=name)
-    except Campaign.DoesNotExist:
-        console.print(f"[red]No campaign matching '{name}'[/red]")
-        raise typer.Exit(1)
-    except Campaign.MultipleObjectsReturned:
-        console.print(f"[yellow]Multiple campaigns match '{name}' — be more specific[/yellow]")
-        raise typer.Exit(1)
-
+    c = _get_campaign(name)
     console.print(f"\n[bold]{c.name}[/bold]")
     console.print(f"[dim]objective[/dim]   {c.campaign_objective or '—'}")
     console.print(f"[dim]booking[/dim]     {c.booking_link or '—'}")
@@ -299,25 +380,104 @@ def campaign_show(name: str = typer.Argument(..., help="Campaign name (partial m
     for r in Deal.objects.filter(campaign=c).values("state").annotate(n=Count("id")).order_by("state"):
         console.print(f"  {_sc(r['state'])}  {r['n']}")
 
-    console.print(f"\n[bold]Product docs[/bold]")
+    console.print("\n[bold]Product docs[/bold]")
     console.print(f"  {c.product_docs or '[dim]—[/dim]'}")
     console.print()
+
+
+@campaign_app.command("create")
+def campaign_create(
+    name: str = typer.Option(..., prompt="Campaign name"),
+    objective: str = typer.Option(..., prompt="Campaign objective"),
+    booking: str = typer.Option(..., prompt="Booking link"),
+    docs: str = typer.Option(..., prompt="Product docs"),
+    freemium: bool = typer.Option(False, "--freemium/--no-freemium"),
+):
+    """Create a new campaign."""
+    from linkedin.models import Campaign
+    from django.contrib.auth.models import User
+
+    if Campaign.objects.filter(name=name).exists():
+        console.print(f"[red]Campaign '{name}' already exists[/red]")
+        raise typer.Exit(1)
+
+    c = Campaign.objects.create(
+        name=name,
+        campaign_objective=objective,
+        booking_link=booking,
+        product_docs=docs,
+        is_freemium=freemium,
+    )
+    # Add all existing users to the campaign
+    for user in User.objects.all():
+        c.users.add(user)
+
+    console.print(f"[green]Campaign '{c.name}' created (id={c.pk})[/green]")
+
+
+@campaign_app.command("update")
+def campaign_update(
+    name: str = typer.Argument(..., help="Campaign name (partial match)"),
+    objective: Optional[str] = typer.Option(None, "--objective"),
+    booking: Optional[str] = typer.Option(None, "--booking"),
+    docs: Optional[str] = typer.Option(None, "--docs"),
+    new_name: Optional[str] = typer.Option(None, "--name"),
+):
+    """Update campaign fields."""
+    c = _get_campaign(name)
+    changed = []
+
+    if objective is not None:
+        c.campaign_objective = objective
+        changed.append("objective")
+    if booking is not None:
+        c.booking_link = booking
+        changed.append("booking_link")
+    if docs is not None:
+        c.product_docs = docs
+        changed.append("product_docs")
+    if new_name is not None:
+        c.name = new_name
+        changed.append("name")
+
+    if not changed:
+        console.print("[yellow]Nothing to update — pass at least one option[/yellow]")
+        raise typer.Exit(0)
+
+    c.save(update_fields=changed)
+    console.print(f"[green]Updated: {', '.join(changed)}[/green]")
+
+
+@campaign_app.command("delete")
+def campaign_delete(
+    name: str = typer.Argument(..., help="Campaign name (partial match)"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Delete a campaign and all its deals."""
+    c = _get_campaign(name)
+    if not yes:
+        typer.confirm(f"Delete campaign '{c.name}' and all its deals?", abort=True)
+    c.delete()
+    console.print(f"[red]Campaign '{c.name}' deleted[/red]")
 
 
 # ── task ──────────────────────────────────────────────────────────────────────
 
 @task_app.command("list")
 def task_list(
-    status: Optional[str] = typer.Option(None, "--status", help="Filter by status (pending/running/failed)"),
-    limit: int = typer.Option(20, "--limit", help="Max rows to show"),
+    status: Optional[str] = typer.Option(None, "--status", help="pending/running/completed/failed"),
+    limit: int = typer.Option(20, "--limit"),
 ):
     """List tasks in the queue."""
-    from linkedin.models import Task
+    from linkedin.models import Task, Campaign
 
     qs = Task.objects.order_by("scheduled_at")
     if status:
         qs = qs.filter(status__icontains=status)
     qs = qs[:limit]
+
+    campaign_map = {c.pk: c.name for c in Campaign.objects.all()}
+    STATUS_COLOR = {"pending": "yellow", "running": "green", "completed": "dim", "failed": "red"}
 
     t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
     t.add_column("ID", style="dim", width=6)
@@ -326,19 +486,15 @@ def task_list(
     t.add_column("Scheduled", width=17)
     t.add_column("Campaign", max_width=30, no_wrap=True)
 
-    STATUS_COLOR = {"pending": "yellow", "running": "green", "completed": "dim", "failed": "red"}
-    from linkedin.models import Campaign
-    campaign_map = {c.pk: c.name for c in Campaign.objects.all()}
     for task in qs:
         sc = STATUS_COLOR.get(task.status, "white")
-        campaign_id = task.payload.get("campaign_id")
-        campaign_name = campaign_map.get(campaign_id, "—") if campaign_id else "—"
+        cname = campaign_map.get(task.payload.get("campaign_id"), "—")
         t.add_row(
             str(task.pk),
             task.task_type,
             f"[{sc}]{task.status}[/{sc}]",
             task.scheduled_at.strftime("%Y-%m-%d %H:%M") if task.scheduled_at else "—",
-            campaign_name,
+            cname,
         )
     console.print(t)
 
@@ -356,7 +512,73 @@ def task_cancel(task_id: int = typer.Argument(..., help="Task ID to cancel")):
 
     task.status = "failed"
     task.save(update_fields=["status"])
-    console.print(f"[green]Task {task_id} cancelled[/green]")
+    console.print(f"[yellow]Task {task_id} cancelled[/yellow]")
+
+
+# ── keyword ───────────────────────────────────────────────────────────────────
+
+@keyword_app.command("list")
+def keyword_list(campaign: Optional[str] = typer.Option(None, "--campaign")):
+    """List search keywords."""
+    from linkedin.models import SearchKeyword
+
+    qs = SearchKeyword.objects.select_related("campaign").order_by("campaign__name", "keyword")
+    if campaign:
+        qs = qs.filter(campaign__name__icontains=campaign)
+
+    t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    t.add_column("ID", style="dim", width=5)
+    t.add_column("Keyword")
+    t.add_column("Campaign", max_width=30, no_wrap=True)
+    t.add_column("Used", justify="center", width=5)
+    t.add_column("Used at", width=11)
+
+    for kw in qs:
+        t.add_row(
+            str(kw.pk),
+            kw.keyword,
+            kw.campaign.name,
+            "[dim]✓[/dim]" if kw.used else "·",
+            kw.used_at.strftime("%Y-%m-%d") if kw.used_at else "—",
+        )
+    console.print(t)
+    console.print(f"[dim]{qs.count()} keywords[/dim]\n")
+
+
+@keyword_app.command("add")
+def keyword_add(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    keyword: str = typer.Argument(..., help="Search keyword"),
+):
+    """Add a search keyword to a campaign."""
+    from linkedin.models import SearchKeyword
+
+    c = _get_campaign(campaign)
+    _, created = SearchKeyword.objects.get_or_create(campaign=c, keyword=keyword)
+    if created:
+        console.print(f"[green]Added keyword '{keyword}' to '{c.name}'[/green]")
+    else:
+        console.print(f"[yellow]Keyword '{keyword}' already exists in '{c.name}'[/yellow]")
+
+
+@keyword_app.command("delete")
+def keyword_delete(
+    keyword_id: int = typer.Argument(..., help="Keyword ID"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Delete a search keyword."""
+    from linkedin.models import SearchKeyword
+
+    try:
+        kw = SearchKeyword.objects.select_related("campaign").get(pk=keyword_id)
+    except SearchKeyword.DoesNotExist:
+        console.print(f"[red]Keyword {keyword_id} not found[/red]")
+        raise typer.Exit(1)
+
+    if not yes:
+        typer.confirm(f"Delete keyword '{kw.keyword}' from '{kw.campaign.name}'?", abort=True)
+    kw.delete()
+    console.print(f"[red]Keyword '{kw.keyword}' deleted[/red]")
 
 
 if __name__ == "__main__":
