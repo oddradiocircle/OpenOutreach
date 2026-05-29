@@ -16,3 +16,4 @@ __pycache__/
 .cache/
 tests/fixtures/pages/**/*.html
 /tmp/
+*.egg-info/
