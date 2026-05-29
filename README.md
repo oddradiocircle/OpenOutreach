@@ -135,13 +135,20 @@ make run
 ```
 The interactive onboarding will prompt for LinkedIn credentials, LLM API key, and campaign details on first run. Fully resumable — stop/restart anytime without losing progress.
 
-### 3. Check System Status
+### 3. Check System Status and Browse CRM
 
 ```bash
+# System overview (campaigns, task queue, activity today)
 python manage.py status
-```
 
-Prints a live summary of campaigns, deals by state, task queue (with next scheduled action), and today's activity — useful for a quick health check without opening the browser.
+# Browse CRM data with rich tables
+python manage.py crm leads                        # all leads
+python manage.py crm leads --disqualified         # disqualified only
+python manage.py crm deals                        # all deals
+python manage.py crm deals --state connected      # filter by state
+python manage.py crm deals --campaign "Skemática" # filter by campaign
+python manage.py crm deal 42                      # full detail for deal #42
+```
 
 ### 4. View Your Data (CRM Admin)
 

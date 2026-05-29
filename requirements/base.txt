@@ -9,6 +9,7 @@ jsonpath-ng
 pandas
 jinja2
 termcolor
+rich
 Django>=5.2,<7.0
 tendo
 pyyaml
