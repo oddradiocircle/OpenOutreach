@@ -1,8 +1,10 @@
 # linkedin/admin.py
 from django.contrib import admin
+from django.db.models import Count, Q
+from django.utils.html import format_html, mark_safe
 
 from chat.models import ChatMessage
-
+from linkedin.enums import ProfileState
 from linkedin.models import ActionLog, Campaign, LinkedInProfile, SearchKeyword, SiteConfig, Task
 
 
@@ -17,10 +19,43 @@ class SiteConfigAdmin(admin.ModelAdmin):
         return False
 
 
+def _state_pill(count, label, color):
+    if not count:
+        return ""
+    return (
+        f'<span style="background:{color};color:#fff;padding:1px 6px;'
+        f'border-radius:4px;font-size:11px;margin-right:3px">'
+        f'{label}&nbsp;{count}</span>'
+    )
+
+
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
-    list_display = ("name", "booking_link", "website_url")
+    list_display = ("name", "deal_pipeline", "require_message_approval", "booking_link")
     filter_horizontal = ("users",)
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.annotate(
+            _qualified=Count("deals", filter=Q(deals__state=ProfileState.QUALIFIED)),
+            _ready=Count("deals", filter=Q(deals__state=ProfileState.READY_TO_CONNECT)),
+            _pending=Count("deals", filter=Q(deals__state=ProfileState.PENDING)),
+            _connected=Count("deals", filter=Q(deals__state=ProfileState.CONNECTED)),
+            _completed=Count("deals", filter=Q(deals__state=ProfileState.COMPLETED)),
+            _failed=Count("deals", filter=Q(deals__state=ProfileState.FAILED)),
+        )
+
+    def deal_pipeline(self, obj):
+        pills = "".join([
+            _state_pill(obj._qualified, "Qualified", "#6c757d"),
+            _state_pill(obj._ready, "Ready", "#0d6efd"),
+            _state_pill(obj._pending, "Pending", "#fd7e14"),
+            _state_pill(obj._connected, "Connected", "#198754"),
+            _state_pill(obj._completed, "Completed", "#20c997"),
+            _state_pill(obj._failed, "Failed", "#dc3545"),
+        ])
+        return mark_safe(pills) if pills else "—"
+    deal_pipeline.short_description = "Pipeline"
 
 
 @admin.register(LinkedInProfile)
@@ -48,19 +83,56 @@ class ActionLogAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
-    list_display = ("task_type", "status", "scheduled_at", "payload", "created_at")
+    list_display = ("task_type", "status", "scheduled_at", "campaign_name", "created_at")
     list_filter = ("task_type", "status")
     readonly_fields = (
         "task_type", "status", "scheduled_at", "payload",
         "created_at", "started_at", "completed_at",
     )
     date_hierarchy = "scheduled_at"
+    _campaign_cache: dict = {}
+
+    def campaign_name(self, obj):
+        campaign_id = obj.payload.get("campaign_id")
+        if not campaign_id:
+            return "—"
+        if campaign_id not in self._campaign_cache:
+            try:
+                self._campaign_cache[campaign_id] = Campaign.objects.get(pk=campaign_id).name
+            except Campaign.DoesNotExist:
+                self._campaign_cache[campaign_id] = f"Campaign #{campaign_id}"
+        return self._campaign_cache[campaign_id]
+    campaign_name.short_description = "Campaign"
 
 
 @admin.register(ChatMessage)
 class ChatMessageAdmin(admin.ModelAdmin):
-    list_display = ("content_type", "object_id", "owner", "creation_date")
-    list_filter = ("content_type", "owner")
+    list_display = ("message_preview", "direction", "deal_link", "creation_date")
+    list_filter = ("is_outgoing",)
     raw_id_fields = ("owner", "answer_to", "topic")
     date_hierarchy = "creation_date"
-    readonly_fields = ("content_type", "object_id", "content", "owner", "creation_date")
+    readonly_fields = ("content_type", "object_id", "content", "owner", "is_outgoing", "creation_date", "linkedin_urn")
+
+    def message_preview(self, obj):
+        text = obj.content[:80] + "…" if len(obj.content) > 80 else obj.content
+        return text
+    message_preview.short_description = "Message"
+
+    def direction(self, obj):
+        if obj.is_outgoing:
+            return mark_safe('<span style="color:#0d6efd;font-weight:600">&rarr; Sent</span>')
+        return mark_safe('<span style="color:#198754;font-weight:600">&larr; Received</span>')
+    direction.short_description = "Dir"
+    direction.admin_order_field = "is_outgoing"
+
+    def deal_link(self, obj):
+        deal = obj.content_object
+        if deal is None:
+            return f"#{obj.object_id}"
+        try:
+            lead = deal.lead
+            url = f"/admin/crm/deal/{deal.pk}/change/"
+            return format_html('<a href="{}">{}</a>', url, lead.public_identifier)
+        except Exception:
+            return f"#{obj.object_id}"
+    deal_link.short_description = "Deal"
