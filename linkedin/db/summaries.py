@@ -42,6 +42,12 @@ Rules:
   solely as context to disambiguate the lead's replies (e.g. if the lead
   says "yes", use the preceding [Me] message to understand what they agreed
   to). Never extract facts about what [Me] said, offered, or asked.
+- Paraphrase trap: when the lead opens their reply by paraphrasing or
+  summarising what [Me] said ("I understand you are building X",
+  "As you said...", "So you're trying to...", "Por lo que entiendo...",
+  "Entiendo que tú..."), that sentence describes [Me]'s product or pitch,
+  NOT the lead's own situation. Skip it entirely. Only extract facts where
+  the lead describes their own experience, opinions, goals, or situation.
 
 Output ONLY a JSON object with this exact shape (no markdown, no prose):
 {"facts": ["Fact one.", "Fact two."]}
