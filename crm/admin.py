@@ -1,8 +1,10 @@
 from django.contrib import admin
+from django.contrib.contenttypes.admin import GenericTabularInline
 from django.db.models import Count
 from django.utils import timezone
-from django.utils.html import format_html, mark_safe
+from django.utils.html import escape, format_html, mark_safe
 
+from chat.models import ChatMessage
 from crm.models.deal import Deal, Outcome
 from crm.models.lead import Lead
 from linkedin.enums import ProfileState
@@ -26,6 +28,26 @@ _OUTCOME_LABELS = {
     Outcome.UNRESPONSIVE: ("Unresponsive", "#adb5bd"),
     Outcome.UNKNOWN: ("Unknown", "#dee2e6"),
 }
+
+
+class ChatMessageInline(GenericTabularInline):
+    model = ChatMessage
+    extra = 0
+    can_delete = False
+    ordering = ("creation_date",)
+    fields = ("direction_col", "content", "creation_date")
+    readonly_fields = ("direction_col", "content", "creation_date")
+    verbose_name = "Message"
+    verbose_name_plural = "Conversation"
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def direction_col(self, obj):
+        if obj.is_outgoing:
+            return mark_safe('<span style="color:#0d6efd;font-weight:600">&rarr; Sent</span>')
+        return mark_safe('<span style="color:#198754;font-weight:600">&larr; Received</span>')
+    direction_col.short_description = "Dir"
 
 
 @admin.register(Lead)
@@ -63,6 +85,7 @@ class DealAdmin(admin.ModelAdmin):
     list_filter = ("state", "outcome", "campaign", "pending_message_approved")
     search_fields = ("lead__public_identifier",)
     list_select_related = ["lead", "campaign"]
+    inlines = [ChatMessageInline]
     readonly_fields = (
         "lead", "campaign", "state", "outcome", "reason",
         "connect_attempts", "backoff_hours", "next_check_pending_at",

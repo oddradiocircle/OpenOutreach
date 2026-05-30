@@ -1,7 +1,7 @@
 # linkedin/admin.py
 from django.contrib import admin
 from django.db.models import Count, Q
-from django.utils.html import format_html, mark_safe
+from django.utils.html import escape, format_html, mark_safe
 
 from chat.models import ChatMessage
 from linkedin.enums import ProfileState
@@ -107,11 +107,19 @@ class TaskAdmin(admin.ModelAdmin):
 
 @admin.register(ChatMessage)
 class ChatMessageAdmin(admin.ModelAdmin):
-    list_display = ("message_preview", "direction", "deal_link", "creation_date")
+    list_display = ("message_preview", "direction", "participants", "creation_date")
     list_filter = ("is_outgoing",)
-    raw_id_fields = ("owner", "answer_to", "topic")
+    ordering = ["object_id", "creation_date"]
+    search_fields = ("content",)
     date_hierarchy = "creation_date"
-    readonly_fields = ("content_type", "object_id", "content", "owner", "is_outgoing", "creation_date", "linkedin_urn")
+    readonly_fields = (
+        "conversation_thread", "direction_display",
+        "content", "owner", "is_outgoing", "creation_date", "linkedin_urn",
+    )
+    fields = ("conversation_thread", "direction_display", "content", "owner", "creation_date", "linkedin_urn")
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related("owner", "content_type")
 
     def message_preview(self, obj):
         text = obj.content[:80] + "…" if len(obj.content) > 80 else obj.content
@@ -125,14 +133,95 @@ class ChatMessageAdmin(admin.ModelAdmin):
     direction.short_description = "Dir"
     direction.admin_order_field = "is_outgoing"
 
-    def deal_link(self, obj):
-        deal = obj.content_object
-        if deal is None:
-            return f"#{obj.object_id}"
+    def direction_display(self, obj):
+        return self.direction(obj)
+    direction_display.short_description = "Direction"
+
+    def _resolve_deal(self, obj):
         try:
-            lead = deal.lead
-            url = f"/admin/crm/deal/{deal.pk}/change/"
-            return format_html('<a href="{}">{}</a>', url, lead.public_identifier)
+            return obj.content_object
         except Exception:
-            return f"#{obj.object_id}"
-    deal_link.short_description = "Deal"
+            return None
+
+    def participants(self, obj):
+        deal = self._resolve_deal(obj)
+        if deal is None:
+            return "—"
+        try:
+            lead_name = deal.lead.public_identifier
+            campaign_name = deal.campaign.name
+            seller = obj.owner.get_full_name() or obj.owner.username if obj.owner else "?"
+            deal_url = f"/admin/crm/deal/{deal.pk}/change/"
+            thread_url = f"/admin/chat/chatmessage/?object_id={obj.object_id}"
+            return format_html(
+                '<a href="{}" target="_blank">{}</a>'
+                ' &harr; <strong>{}</strong>'
+                ' <small style="color:#6c757d">({}) &mdash; <a href="{}">ver hilo</a></small>',
+                deal_url, lead_name, seller, campaign_name, thread_url,
+            )
+        except Exception:
+            return f"Deal #{obj.object_id}"
+    participants.short_description = "Conversación"
+
+    def conversation_thread(self, obj):
+        deal = self._resolve_deal(obj)
+        if deal is None:
+            return "—"
+        try:
+            lead_name = deal.lead.public_identifier
+            lead_url = deal.lead.linkedin_url
+            campaign_name = deal.campaign.name
+            seller = obj.owner.get_full_name() or obj.owner.username if obj.owner else "?"
+        except Exception:
+            lead_name = f"Lead #{obj.object_id}"
+            lead_url = ""
+            campaign_name = "?"
+            seller = "?"
+
+        messages = (
+            ChatMessage.objects
+            .filter(content_type=obj.content_type, object_id=obj.object_id)
+            .order_by("creation_date")
+        )
+
+        header = format_html(
+            '<div style="margin-bottom:10px;padding:8px 12px;background:#f8f9fa;'
+            'border-radius:6px;border-left:4px solid #0d6efd">'
+            '<strong><a href="{}" target="_blank">{}</a></strong>'
+            ' &harr; <strong>{}</strong>'
+            ' &mdash; <span style="color:#6c757d">{}</span>'
+            '</div>',
+            lead_url, lead_name, seller, campaign_name,
+        )
+
+        bubbles = []
+        for msg in messages:
+            is_current = msg.pk == obj.pk
+            if msg.is_outgoing:
+                bg, align, label, label_color = "#dbeafe", "right", "→ Sent", "#1d4ed8"
+            else:
+                bg, align, label, label_color = "#dcfce7", "left", "← Received", "#15803d"
+
+            border = "2px solid #1d4ed8" if is_current else "1px solid transparent"
+            date_str = msg.creation_date.strftime("%Y-%m-%d %H:%M")
+            content_html = escape(msg.content).replace("\n", "<br>")
+
+            bubbles.append(
+                f'<div style="margin-bottom:10px;text-align:{align}">'
+                f'<div style="display:inline-block;max-width:75%;text-align:left;'
+                f'background:{bg};padding:8px 12px;border-radius:8px;border:{border}">'
+                f'<div style="font-size:11px;color:{label_color};font-weight:600;margin-bottom:4px">'
+                f'{label} &bull; {date_str}</div>'
+                f'{content_html}'
+                f'</div></div>'
+            )
+
+        thread_html = (
+            '<div style="border:1px solid #dee2e6;border-radius:8px;padding:12px;'
+            'max-height:600px;overflow-y:auto">'
+            + "".join(bubbles)
+            + "</div>"
+        )
+
+        return mark_safe(str(header) + thread_html)
+    conversation_thread.short_description = "Hilo de conversación"
