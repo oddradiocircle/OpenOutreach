@@ -65,7 +65,16 @@ def _leads_followed_up_elsewhere(campaign):
     )
 
 
-def _next_followup_deal(campaign):
+def _sync_conversation_quietly(session, deal) -> None:
+    """Sync the deal's LinkedIn conversation to catch unseen replies (best-effort)."""
+    from linkedin.db.chat import sync_conversation
+    try:
+        sync_conversation(session, deal.lead.public_identifier)
+    except Exception:
+        logger.debug("pre-check sync failed for %s", deal.lead.public_identifier)
+
+
+def _next_followup_deal(campaign, session=None):
     """Oldest CONNECTED deal in *campaign* eligible for a new follow-up draft."""
     from crm.models import Deal
 
@@ -84,6 +93,12 @@ def _next_followup_deal(campaign):
     for deal in deals:
         if not _too_soon_to_nudge(deal):
             return deal
+        # The last known message is outgoing — sync to catch any unseen reply,
+        # then re-check so a reply unblocks the deal immediately.
+        if session is not None:
+            _sync_conversation_quietly(session, deal)
+            if not _too_soon_to_nudge(deal):
+                return deal
     return None
 
 
@@ -154,7 +169,7 @@ def handle_follow_up(task, session, qualifiers):
         _send_approved(session, approved)
         return
 
-    deal = _next_followup_deal(campaign)
+    deal = _next_followup_deal(campaign, session=session)
     if deal is None:
         logger.info("[%s] follow_up: no eligible CONNECTED deal — slot skipped", campaign)
         return
