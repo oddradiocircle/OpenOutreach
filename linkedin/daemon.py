@@ -20,6 +20,8 @@ from linkedin.conf import (
     ENABLE_ACTIVE_HOURS,
 )
 from linkedin.diagnostics import failure_diagnostics
+from playwright._impl._errors import TargetClosedError
+
 from linkedin.exceptions import AuthenticationError
 from linkedin.ml.qualifier import BayesianQualifier
 from linkedin.models import Task
@@ -251,6 +253,15 @@ def run_daemon(session):
         try:
             with failure_diagnostics(session):
                 handler(task, session, qualifiers)
+        except TargetClosedError:
+            logger.warning("Browser target closed during %s — relaunching", task)
+            try:
+                session.close()
+                session.ensure_browser()
+            except Exception:
+                logger.exception("Browser relaunch failed for %s", task)
+            task.mark_failed()
+            continue
         except AuthenticationError:
             logger.warning("Session expired during %s — re-authenticating", task)
             try:
