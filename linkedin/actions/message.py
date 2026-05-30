@@ -126,7 +126,7 @@ def _send_message_via_api(session, profile: Dict[str, Any], message: str) -> boo
     Requires profile dict to contain 'urn' (target profile URN).
     """
     from linkedin.api.client import PlaywrightLinkedinAPI
-    from linkedin.api.messaging import send_message
+    from linkedin.api.messaging import send_message, create_conversation
     from linkedin.actions.conversations import find_conversation_urn, find_conversation_urn_via_navigation
 
     public_identifier = profile.get("public_identifier")
@@ -141,16 +141,23 @@ def _send_message_via_api(session, profile: Dict[str, Any], message: str) -> boo
     conversation_urn = find_conversation_urn(api, target_urn, mailbox_urn)
     if not conversation_urn:
         conversation_urn = find_conversation_urn_via_navigation(session, target_urn)
-    if not conversation_urn:
-        logger.error("API send failed for %s → no conversation found", public_identifier)
-        return False
 
+    if conversation_urn:
+        try:
+            send_message(api, conversation_urn, message, mailbox_urn)
+            logger.info("Message sent to %s (API fallback)", public_identifier)
+            return True
+        except Exception as e:
+            logger.error("API send failed for %s → %s", public_identifier, e)
+            return False
+
+    # No existing thread — create a new conversation with the first message.
     try:
-        send_message(api, conversation_urn, message, mailbox_urn)
-        logger.info("Message sent to %s (API fallback)", public_identifier)
+        create_conversation(api, target_urn, message)
+        logger.info("Message sent to %s (API new conversation)", public_identifier)
         return True
     except Exception as e:
-        logger.error("API send failed for %s → %s", public_identifier, e)
+        logger.error("API create_conversation failed for %s → %s", public_identifier, e)
         return False
 
 

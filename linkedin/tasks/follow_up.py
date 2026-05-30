@@ -122,11 +122,7 @@ def _send_approved(session, deal) -> None:
 
     sent = send_raw_message(session, _build_send_profile(deal), message)
     if not sent:
-        set_profile_state(session, public_id, ProfileState.QUALIFIED.value)
-        logger.warning("follow_up for %s: send failed — moving to QUALIFIED for re-connection", public_id)
-        deal.pending_message = ""
-        deal.pending_message_approved = False
-        deal.save(update_fields=["pending_message", "pending_message_approved"])
+        logger.warning("follow_up for %s: approved send failed — will retry on next slot", public_id)
         return
 
     session.linkedin_profile.record_action(ActionLog.ActionType.FOLLOW_UP, campaign)

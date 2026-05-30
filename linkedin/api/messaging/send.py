@@ -74,6 +74,43 @@ def send_message(
     return data
 
 
+def create_conversation(api: PlaywrightLinkedinAPI, target_urn: str, message_text: str) -> dict:
+    """Create a new conversation and send the first message via Voyager legacy API.
+
+    Use when no existing conversation thread exists with the target profile.
+    Returns the raw API response dict.
+    """
+    payload = {
+        "keyVersion": "LEGACY_INBOX",
+        "conversationCreate": {
+            "eventCreate": {
+                "value": {
+                    "com.linkedin.voyager.messaging.create.MessageCreate": {
+                        "attributedBody": {
+                            "text": message_text,
+                            "attributes": [],
+                        },
+                        "attachments": [],
+                    }
+                }
+            },
+            "recipients": [target_urn],
+            "subtype": "MEMBER_TO_MEMBER",
+        },
+    }
+
+    url = "https://www.linkedin.com/voyager/api/messaging/conversations"
+    headers = {**api.headers, "content-type": "application/json"}
+
+    logger.debug("Voyager create_conversation → %s", target_urn)
+    res = api.post(url, headers=headers, data=json.dumps(payload))
+    check_response(res, "create_conversation")
+
+    data = res.json()
+    logger.info("Conversation created → %s", target_urn)
+    return data
+
+
 if __name__ == "__main__":
     from crm.models import Lead
     from linkedin.browser.registry import cli_parser, cli_session
