@@ -66,6 +66,7 @@ def _find(page, key: str, timeout: int = 5000) -> Locator:
 def send_raw_message(session, profile: Dict[str, Any], message: str) -> bool:
     """Send an arbitrary message to a profile. Returns True if sent."""
     public_identifier = profile.get("public_identifier")
+    session.ensure_browser()
 
     if _send_message(session, profile, message):
         return True

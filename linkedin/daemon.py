@@ -254,12 +254,11 @@ def run_daemon(session):
             with failure_diagnostics(session):
                 handler(task, session, qualifiers)
         except TargetClosedError:
-            logger.warning("Browser target closed during %s — relaunching", task)
+            logger.warning("Browser target closed during %s — will relaunch on next task", task)
             try:
                 session.close()
-                session.ensure_browser()
             except Exception:
-                logger.exception("Browser relaunch failed for %s", task)
+                logger.exception("Browser close failed for %s", task)
             task.mark_failed()
             continue
         except AuthenticationError:

@@ -45,6 +45,7 @@ class AccountSession:
         from linkedin.browser.login import start_browser_session
 
         if not self.page or self.page.is_closed():
+            self.close()  # stop stale playwright instance before creating a new one
             logger.debug("Launching/recovering browser for %s", self)
             start_browser_session(session=self)
         else:
