@@ -128,55 +128,43 @@ class ChatMessageAdmin(admin.ModelAdmin):
 
     def direction(self, obj):
         if obj.is_outgoing:
-            return mark_safe('<span style="color:#0d6efd;font-weight:600">&rarr; Sent</span>')
-        return mark_safe('<span style="color:#198754;font-weight:600">&larr; Received</span>')
+            return mark_safe('<span style="color:#0d6efd;font-weight:600">&rarr; Enviado</span>')
+        return mark_safe('<span style="color:#198754;font-weight:600">&larr; Recibido</span>')
     direction.short_description = "Dir"
     direction.admin_order_field = "is_outgoing"
 
     def direction_display(self, obj):
         return self.direction(obj)
-    direction_display.short_description = "Direction"
-
-    def _resolve_deal(self, obj):
-        try:
-            return obj.content_object
-        except Exception:
-            return None
+    direction_display.short_description = "Dirección"
 
     def participants(self, obj):
-        deal = self._resolve_deal(obj)
-        if deal is None:
+        lead = obj.content_object
+        if lead is None:
             return "—"
         try:
-            lead_name = deal.lead.public_identifier
-            campaign_name = deal.campaign.name
             seller = obj.owner.get_full_name() or obj.owner.username if obj.owner else "?"
-            deal_url = f"/admin/crm/deal/{deal.pk}/change/"
+            lead_url = f"/admin/crm/lead/{lead.pk}/change/"
             thread_url = f"/admin/chat/chatmessage/?object_id={obj.object_id}"
             return format_html(
-                '<a href="{}" target="_blank">{}</a>'
+                '<a href="{}">{}</a>'
                 ' &harr; <strong>{}</strong>'
-                ' <small style="color:#6c757d">({}) &mdash; <a href="{}">ver hilo</a></small>',
-                deal_url, lead_name, seller, campaign_name, thread_url,
+                ' <small style="color:#6c757d">&mdash; <a href="{}">ver hilo</a></small>',
+                lead_url, lead.public_identifier, seller, thread_url,
             )
         except Exception:
-            return f"Deal #{obj.object_id}"
+            return f"Lead #{obj.object_id}"
     participants.short_description = "Conversación"
 
     def conversation_thread(self, obj):
-        deal = self._resolve_deal(obj)
-        if deal is None:
+        lead = obj.content_object
+        if lead is None:
             return "—"
         try:
-            lead_name = deal.lead.public_identifier
-            lead_url = deal.lead.linkedin_url
-            campaign_name = deal.campaign.name
+            lead_name = lead.public_identifier
+            lead_li_url = lead.linkedin_url
             seller = obj.owner.get_full_name() or obj.owner.username if obj.owner else "?"
         except Exception:
-            lead_name = f"Lead #{obj.object_id}"
-            lead_url = ""
-            campaign_name = "?"
-            seller = "?"
+            lead_name, lead_li_url, seller = f"Lead #{obj.object_id}", "", "?"
 
         messages = (
             ChatMessage.objects
@@ -184,44 +172,14 @@ class ChatMessageAdmin(admin.ModelAdmin):
             .order_by("creation_date")
         )
 
+        from crm.admin import _render_chat_thread
         header = format_html(
             '<div style="margin-bottom:10px;padding:8px 12px;background:#f8f9fa;'
             'border-radius:6px;border-left:4px solid #0d6efd">'
             '<strong><a href="{}" target="_blank">{}</a></strong>'
             ' &harr; <strong>{}</strong>'
-            ' &mdash; <span style="color:#6c757d">{}</span>'
             '</div>',
-            lead_url, lead_name, seller, campaign_name,
+            lead_li_url, lead_name, seller,
         )
-
-        bubbles = []
-        for msg in messages:
-            is_current = msg.pk == obj.pk
-            if msg.is_outgoing:
-                bg, align, label, label_color = "#dbeafe", "right", "→ Sent", "#1d4ed8"
-            else:
-                bg, align, label, label_color = "#dcfce7", "left", "← Received", "#15803d"
-
-            border = "2px solid #1d4ed8" if is_current else "1px solid transparent"
-            date_str = msg.creation_date.strftime("%Y-%m-%d %H:%M")
-            content_html = escape(msg.content).replace("\n", "<br>")
-
-            bubbles.append(
-                f'<div style="margin-bottom:10px;text-align:{align}">'
-                f'<div style="display:inline-block;max-width:75%;text-align:left;'
-                f'background:{bg};padding:8px 12px;border-radius:8px;border:{border}">'
-                f'<div style="font-size:11px;color:{label_color};font-weight:600;margin-bottom:4px">'
-                f'{label} &bull; {date_str}</div>'
-                f'{content_html}'
-                f'</div></div>'
-            )
-
-        thread_html = (
-            '<div style="border:1px solid #dee2e6;border-radius:8px;padding:12px;'
-            'max-height:600px;overflow-y:auto">'
-            + "".join(bubbles)
-            + "</div>"
-        )
-
-        return mark_safe(str(header) + thread_html)
+        return mark_safe(str(header) + _render_chat_thread(messages, highlight_pk=obj.pk))
     conversation_thread.short_description = "Hilo de conversación"
