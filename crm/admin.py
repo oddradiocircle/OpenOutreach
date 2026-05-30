@@ -113,7 +113,7 @@ class LeadAdmin(admin.ModelAdmin):
 class DealAdmin(admin.ModelAdmin):
     list_display = (
         "lead_name", "li_icon", "campaign", "state_badge", "outcome_badge",
-        "days_idle", "message_count", "has_pending_message", "creation_date",
+        "conv_status", "days_idle", "message_count", "pending_status",
     )
     list_display_links = ("lead_name",)
     list_filter = ("state", "outcome", "campaign", "pending_message_approved")
@@ -127,6 +127,22 @@ class DealAdmin(admin.ModelAdmin):
     )
     fields = readonly_fields + ("pending_message", "pending_message_approved")
     date_hierarchy = "creation_date"
+
+    def get_queryset(self, request):
+        from chat.models import ChatMessage
+        from django.contrib.contenttypes.models import ContentType
+        from django.db.models import OuterRef, Subquery
+
+        qs = super().get_queryset(request)
+        lead_ct_id = ContentType.objects.get_for_model(Lead).id
+        last_msg_qs = ChatMessage.objects.filter(
+            content_type_id=lead_ct_id,
+            object_id=OuterRef("lead_id"),
+        ).order_by("-creation_date")
+        return qs.annotate(
+            _last_msg_is_outgoing=Subquery(last_msg_qs.values("is_outgoing")[:1]),
+            _last_msg_date=Subquery(last_msg_qs.values("creation_date")[:1]),
+        )
 
     def lead_name(self, obj):
         return obj.lead.public_identifier if obj.lead_id else "—"
@@ -178,10 +194,48 @@ class DealAdmin(admin.ModelAdmin):
         return format_html('<a href="{}">{} 💬</a>', msgs_url, n)
     message_count.short_description = "Msgs"
 
-    def has_pending_message(self, obj):
-        return bool(obj.pending_message)
-    has_pending_message.boolean = True
-    has_pending_message.short_description = "Draft"
+    def conv_status(self, obj):
+        if not obj.lead_id:
+            return "—"
+        is_outgoing = obj._last_msg_is_outgoing
+        msg_date = obj._last_msg_date
+        if is_outgoing is None:
+            return mark_safe('<span style="color:#6c757d;font-size:11px">Sin mensajes</span>')
+        now = timezone.now()
+        if msg_date:
+            delta = now - msg_date
+            age = f"{delta.days}d" if delta.days else f"{max(int(delta.total_seconds() // 3600), 1)}h"
+        else:
+            age = "?"
+        if not is_outgoing:
+            return format_html(
+                '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;'
+                'border-radius:4px;font-size:11px;font-weight:600">← Respondió</span> '
+                '<span style="color:#6c757d;font-size:11px">{}</span>',
+                age,
+            )
+        return format_html(
+            '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;'
+            'border-radius:4px;font-size:11px;font-weight:600">→ Enviado</span> '
+            '<span style="color:#6c757d;font-size:11px">{}</span>',
+            age,
+        )
+    conv_status.short_description = "Último msg"
+    conv_status.admin_order_field = "_last_msg_date"
+
+    def pending_status(self, obj):
+        if not obj.pending_message:
+            return "—"
+        if obj.pending_message_approved:
+            return mark_safe(
+                '<span style="background:#d1fae5;color:#065f46;padding:1px 6px;'
+                'border-radius:4px;font-size:11px;font-weight:600">✓ Aprobado</span>'
+            )
+        return mark_safe(
+            '<span style="background:#fef3c7;color:#92400e;padding:1px 6px;'
+            'border-radius:4px;font-size:11px;font-weight:600">⏳ Borrador</span>'
+        )
+    pending_status.short_description = "Draft"
 
     def _render_facts(self, data):
         if not data:

@@ -74,11 +74,51 @@ class SearchKeywordAdmin(admin.ModelAdmin):
 
 @admin.register(ActionLog)
 class ActionLogAdmin(admin.ModelAdmin):
-    list_display = ("action_type", "linkedin_profile", "campaign", "created_at")
+    list_display = ("action_type", "linkedin_profile", "campaign", "daily_usage", "created_at")
     list_filter = ("action_type", "campaign")
     raw_id_fields = ("linkedin_profile", "campaign")
     date_hierarchy = "created_at"
     readonly_fields = ("linkedin_profile", "campaign", "action_type", "created_at")
+    ordering = ("-created_at",)
+
+    def get_queryset(self, request):
+        from django.db.models import IntegerField, OuterRef, Subquery
+        from django.utils import timezone
+
+        qs = super().get_queryset(request).select_related("linkedin_profile", "campaign")
+        today = timezone.now().date()
+        daily_sq = Subquery(
+            ActionLog.objects.filter(
+                linkedin_profile=OuterRef("linkedin_profile"),
+                action_type=OuterRef("action_type"),
+                created_at__date=today,
+            )
+            .values("linkedin_profile", "action_type")
+            .annotate(n=Count("pk"))
+            .values("n"),
+            output_field=IntegerField(),
+        )
+        return qs.annotate(_daily_count=daily_sq)
+
+    def daily_usage(self, obj):
+        count = obj._daily_count or 0
+        limit_field = {
+            ActionLog.ActionType.CONNECT: "connect_daily_limit",
+            ActionLog.ActionType.FOLLOW_UP: "follow_up_daily_limit",
+        }.get(obj.action_type)
+        if not limit_field:
+            return str(count)
+        limit = getattr(obj.linkedin_profile, limit_field, None)
+        if limit is None:
+            return str(count)
+        ratio = count / limit if limit else 1
+        color = "#dc3545" if ratio >= 1 else ("#fd7e14" if ratio >= 0.8 else "#198754")
+        return format_html(
+            '<span style="color:{};font-weight:600">{}</span>'
+            '<span style="color:#6c757d"> / {}</span>',
+            color, count, limit,
+        )
+    daily_usage.short_description = "Hoy"
 
 
 @admin.register(Task)
