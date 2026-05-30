@@ -78,7 +78,7 @@ Three task types (handlers in `linkedin/tasks/`, signature: `handle_*(task, sess
 
 1. **`handle_connect`** — Unified via `ConnectStrategy` dataclass. Regular: `find_candidate()` from `pools.py`; freemium: `find_freemium_candidate()`. Unreachable detection after `MAX_CONNECT_ATTEMPTS` (3). No self-rescheduling — the planner owns timing.
 2. **`handle_check_pending`** — Eligibility query: oldest PENDING deal in the campaign with `next_check_pending_at <= now`. If none, mark task DONE. On still-PENDING outcome, double `backoff_hours` and re-stamp `next_check_pending_at`.
-3. **`handle_follow_up`** — Eligibility query: oldest CONNECTED deal in the campaign with no recent outgoing message. If none, mark task DONE. Otherwise call `run_follow_up_agent()` (returns `FollowUpDecision`: `send_message`/`mark_completed`/`wait`) and execute deterministically.
+3. **`handle_follow_up`** — Two-phase. **Phase 1 (approval drain):** if the campaign has `require_message_approval=True`, check for a deal with `pending_message_approved=True`; if found, send immediately, clear the draft fields, and return. **Phase 2 (generate):** oldest CONNECTED deal in the campaign with `pending_message=""`, no recent outgoing message, and not being followed up in another campaign. If none, skip slot. Otherwise call `run_follow_up_agent()` (`FollowUpDecision`: `send_message`/`mark_completed`/`wait`). If approval is required and action is `send_message`, write the draft to `Deal.pending_message` and return (held for human review); otherwise send immediately.
 
 ## Qualification ML Pipeline
 
@@ -92,7 +92,7 @@ GPR (sklearn, ConstantKernel * RBF) inside Pipeline(StandardScaler, GPR) with BA
 
 ## Django Admin (`crm/admin.py`)
 
-`Lead` and `Deal` are registered with read-only fieldsets (all fields `readonly_fields`). `LeadAdmin` adds an `has_embedding` boolean column. `DealAdmin` is filterable by `state`, `outcome`, and `campaign`, with a `date_hierarchy` on `creation_date`. Access at `/admin/` (run via `oo admin` or `make admin`, default port 8001).
+`Lead` and `Deal` are registered with read-only fieldsets. `LeadAdmin` adds a `has_embedding` boolean column. `DealAdmin` is filterable by `state`, `outcome`, `campaign`, and `pending_message_approved`; shows a `Draft` boolean column; exposes `pending_message` and `pending_message_approved` as editable fields so operators can approve drafts directly in Admin. Access at `/admin/` (run via `oo admin` or `make admin`, default port 8001).
 
 ## Django Apps
 
@@ -105,23 +105,23 @@ Three apps in `INSTALLED_APPS`:
 ## CRM Data Model
 
 - **SiteConfig** (`linkedin/models.py`) — Singleton (pk=1). `llm_provider` (TextChoices: openai/anthropic/google/groq/mistral/cohere/openai_compatible), `llm_api_key`, `ai_model`, `llm_api_base`. Accessed via `SiteConfig.load()`; `linkedin/llm.py:get_llm_model()` is the single factory that turns it into a `pydantic_ai.models.Model`.
-- **Campaign** (`linkedin/models.py`) — `name` (unique), `users` (M2M to User), `product_docs`, `campaign_objective`, `booking_link`, `is_freemium`, `action_fraction`, `seed_public_ids` (JSONField).
+- **Campaign** (`linkedin/models.py`) — `name` (unique), `users` (M2M to User), `product_docs`, `campaign_objective`, `booking_link`, `website_url`, `require_message_approval` (BooleanField, default False — when True, generated follow-up messages are held as drafts and must be approved via `oo crm approve` before sending), `action_fraction`, `seed_public_ids` (JSONField).
 - **LinkedInProfile** (`linkedin/models.py`) — 1:1 with User. `self_lead` FK to Lead (nullable, set on first self-profile discovery). Credentials, rate limits (`connect_daily_limit`, `follow_up_daily_limit` — daily-only; LinkedIn's own weekly ceiling surfaces at the handler boundary via `ReachedConnectionLimit`). Methods: `can_execute`/`record_action`/`mark_exhausted`. In-memory `_exhausted` dict for daily rate limit caching.
 - **SearchKeyword** (`linkedin/models.py`) — FK to Campaign. `keyword`, `used`, `used_at`. Unique on `(campaign, keyword)`.
 - **ActionLog** (`linkedin/models.py`) — FK to LinkedInProfile + Campaign. `action_type` (connect/follow_up), `created_at`. Composite index on `(linkedin_profile, action_type, created_at)`.
 - **Lead** (`crm/models/lead.py`) — Per LinkedIn URL (`linkedin_url` = unique). `public_identifier` (derived from URL, unique). `urn` = unique CharField (LinkedIn entity URN, cached on first scrape). `embedding` = 384-dim float32 BinaryField (nullable). `disqualified` = permanent exclusion. The parsed profile dict, person name, and company name are **not stored** — they live only in memory for the lifetime of a scrape dict. Callers that need them re-scrape via `lead.get_profile(session)`. `embedding_array` property for numpy access. `embed_from_profile(profile)` computes + persists the embedding from an in-hand dict (skips the scrape). `get_labeled_arrays(campaign)` classmethod returns (X, y) for GP warm start. Labels: non-FAILED state → 1, FAILED+wrong_fit → 0, other FAILED → skipped.
-- **Deal** (`crm/models/deal.py`) — Per campaign (campaign-scoped via FK). `state` = CharField (ProfileState choices). `outcome` = CharField (Outcome choices: converted/not_interested/wrong_fit/no_budget/has_solution/bad_timing/unresponsive/unknown). `reason` = qualification reason (free text). `connect_attempts` = retry count. `backoff_hours` = check_pending backoff. `next_check_pending_at` = DateTimeField (indexed) stamped by `on_deal_state_entered(PENDING)`; the `check_pending` eligibility query and `plan_check_pending_window` both read it. `profile_summary` / `chat_summary` = JSONField fact lists (lazy, mem0-style, campaign-scoped). `creation_date`, `update_date`.
+- **Deal** (`crm/models/deal.py`) — Per campaign (campaign-scoped via FK). `state` = CharField (ProfileState choices). `outcome` = CharField (Outcome choices: converted/not_interested/wrong_fit/no_budget/has_solution/bad_timing/unresponsive/unknown). `reason` = qualification reason (free text). `connect_attempts` = retry count. `backoff_hours` = check_pending backoff. `next_check_pending_at` = DateTimeField (indexed) stamped by `on_deal_state_entered(PENDING)`; the `check_pending` eligibility query and `plan_check_pending_window` both read it. `profile_summary` / `chat_summary` = JSONField fact lists (lazy, mem0-style, campaign-scoped). `pending_message` = TextField (draft follow-up message awaiting human approval; empty string when no draft). `pending_message_approved` = BooleanField (set to True via `oo crm approve <id>` or Admin; cleared after send). `creation_date`, `update_date`.
 - **Task** (`linkedin/models.py`) — `task_type` (connect/check_pending/follow_up), `status` (pending/running/completed/failed), `scheduled_at`, `payload` (JSONField), `error`, `started_at`, `completed_at`. Composite index on `(status, scheduled_at)`.
 - **ChatMessage** (`chat/models.py`) — GenericForeignKey to any object. `content`, `owner`, `answer_to` (self FK), `topic` (self FK), `recipients`, `to` (M2M to User).
 
 ## Key Modules
 
-- **`daemon.py`** — Worker loop with active-hours guard (`ENABLE_ACTIVE_HOURS` flag, `seconds_until_active()`), `_build_qualifiers()`, freemium import, `_CloudPromoRotator`. Calls `scheduler.reconcile()` when the queue has no ready task.
+- **`daemon.py`** — Worker loop with active-hours guard (`ENABLE_ACTIVE_HOURS` flag, `seconds_until_active()`), `_build_qualifiers()`, freemium import, `_CloudPromoRotator`. Calls `scheduler.reconcile()` when the queue has no ready task. Handles `AuthenticationError` (reauthenticate + retry) and Playwright `TargetClosedError` (close + relaunch browser + mark FAILED) as distinct recovery paths before the general `Exception` fallback.
 - **`diagnostics.py`** — `failure_diagnostics()` context manager, `capture_failure()` saves page HTML/screenshot/traceback to `/tmp/openoutreach-diagnostics/`.
 - **`tasks/scheduler.py`** — Single owner of Task row creation. Per-type planners (`plan_connect_window` / `plan_follow_up_window` / `plan_check_pending_window`) emit lazy slots with `1 immediate + (n-1) Poisson-spaced`; `poisson_slot_times(now, n, horizon_hours)` + `working_seconds_in_window(start, end)` are the spacing primitives. State-transition hook `on_deal_state_entered` only stamps `Deal.next_check_pending_at` for PENDING. `reconcile()` recovers stale RUNNING + dispatches the per-type planners.
 - **`tasks/connect.py`** — `handle_connect`, `ConnectStrategy`.
 - **`tasks/check_pending.py`** — `handle_check_pending`, exponential backoff.
-- **`tasks/follow_up.py`** — `handle_follow_up`, rate limiting.
+- **`tasks/follow_up.py`** — `handle_follow_up` (approval drain → draft generation), `_next_approved_deal`, `_next_followup_deal`, `_send_approved`, `_leads_followed_up_elsewhere`.
 - **`pipeline/qualify.py`** — `run_qualification()`, `fetch_qualification_candidates()`.
 - **`pipeline/search.py`** — `run_search()`, keyword management.
 - **`pipeline/search_keywords.py`** — `generate_search_keywords()` via LLM.

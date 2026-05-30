@@ -19,12 +19,18 @@ class LeadAdmin(admin.ModelAdmin):
 
 @admin.register(Deal)
 class DealAdmin(admin.ModelAdmin):
-    list_display = ("lead", "campaign", "state", "outcome", "creation_date")
-    list_filter = ("state", "outcome", "campaign")
+    list_display = ("lead", "campaign", "state", "outcome", "has_pending_message", "creation_date")
+    list_filter = ("state", "outcome", "campaign", "pending_message_approved")
     search_fields = ("lead__public_identifier",)
     readonly_fields = (
         "lead", "campaign", "state", "outcome", "reason",
         "connect_attempts", "backoff_hours", "next_check_pending_at",
         "profile_summary", "chat_summary", "creation_date", "update_date",
     )
+    fields = readonly_fields + ("pending_message", "pending_message_approved")
     date_hierarchy = "creation_date"
+
+    def has_pending_message(self, obj):
+        return bool(obj.pending_message)
+    has_pending_message.boolean = True
+    has_pending_message.short_description = "Draft"

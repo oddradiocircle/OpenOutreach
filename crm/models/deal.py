@@ -45,6 +45,8 @@ class Deal(models.Model):
     next_check_pending_at = models.DateTimeField(null=True, blank=True, db_index=True)
     profile_summary = models.JSONField(null=True, blank=True, default=None)
     chat_summary = models.JSONField(null=True, blank=True, default=None)
+    pending_message = models.TextField(blank=True, default="")
+    pending_message_approved = models.BooleanField(default=False)
     creation_date = models.DateTimeField(default=timezone.now)
     update_date = models.DateTimeField(auto_now=True)
 

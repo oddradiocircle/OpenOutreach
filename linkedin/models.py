@@ -63,6 +63,7 @@ class Campaign(models.Model):
     campaign_objective = models.TextField(blank=True)
     booking_link = models.URLField(max_length=500, blank=True)
     website_url = models.URLField(max_length=500, blank=True)
+    require_message_approval = models.BooleanField(default=False)
     model_blob = models.BinaryField(null=True, blank=True)
 
     def __str__(self):

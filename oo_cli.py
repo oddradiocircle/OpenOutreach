@@ -289,6 +289,77 @@ def crm_deal(deal_id: int = typer.Argument(..., help="Deal ID")):
     console.print()
 
 
+@crm_app.command("pending")
+def crm_pending(campaign: Optional[str] = typer.Option(None, "--campaign", help="Filter by campaign name")):
+    """List deals with a follow-up message draft awaiting approval."""
+    from crm.models.deal import Deal
+
+    qs = (
+        Deal.objects.exclude(pending_message="")
+        .select_related("lead", "campaign")
+        .order_by("update_date")
+    )
+    if campaign:
+        qs = qs.filter(campaign__name__icontains=campaign)
+
+    if not qs.exists():
+        console.print("[dim]No pending drafts[/dim]\n")
+        return
+
+    for deal in qs:
+        approved = "[green]approved[/green]" if deal.pending_message_approved else "[yellow]awaiting approval[/yellow]"
+        console.print(f"\n[bold]Deal #{deal.pk}[/bold]  {_sc(deal.state)}  {approved}")
+        console.print(f"[dim]lead[/dim]      {deal.lead.public_identifier}")
+        console.print(f"[dim]campaign[/dim]  {deal.campaign.name}")
+        facts = (deal.profile_summary or {}).get("facts") or []
+        if facts:
+            console.print("[dim]profile[/dim]   " + " · ".join(facts[:3]))
+        console.print(f"[bold]draft[/bold]     {deal.pending_message}")
+    console.print()
+
+
+@crm_app.command("approve")
+def crm_approve(deal_id: int = typer.Argument(..., help="Deal ID")):
+    """Approve a pending follow-up draft — will be sent on the next daemon cycle."""
+    from crm.models.deal import Deal
+
+    try:
+        deal = Deal.objects.select_related("lead").get(pk=deal_id)
+    except Deal.DoesNotExist:
+        console.print(f"[red]Deal {deal_id} not found[/red]")
+        raise typer.Exit(1)
+
+    if not deal.pending_message:
+        console.print(f"[yellow]Deal {deal_id} has no pending draft[/yellow]")
+        raise typer.Exit(1)
+
+    deal.pending_message_approved = True
+    deal.save(update_fields=["pending_message_approved"])
+    console.print(f"[green]Deal {deal_id} ({deal.lead.public_identifier}): draft approved — will send on next daemon cycle[/green]")
+    console.print(f"[dim]{deal.pending_message}[/dim]")
+
+
+@crm_app.command("reject")
+def crm_reject(deal_id: int = typer.Argument(..., help="Deal ID")):
+    """Discard a pending follow-up draft — daemon will generate a new one next cycle."""
+    from crm.models.deal import Deal
+
+    try:
+        deal = Deal.objects.select_related("lead").get(pk=deal_id)
+    except Deal.DoesNotExist:
+        console.print(f"[red]Deal {deal_id} not found[/red]")
+        raise typer.Exit(1)
+
+    if not deal.pending_message:
+        console.print(f"[yellow]Deal {deal_id} has no pending draft[/yellow]")
+        raise typer.Exit(1)
+
+    deal.pending_message = ""
+    deal.pending_message_approved = False
+    deal.save(update_fields=["pending_message", "pending_message_approved"])
+    console.print(f"[yellow]Deal {deal_id} ({deal.lead.public_identifier}): draft discarded[/yellow]")
+
+
 @crm_app.command("set-state")
 def crm_set_state(
     deal_id: int = typer.Argument(..., help="Deal ID"),
@@ -374,6 +445,8 @@ def campaign_show(name: str = typer.Argument(..., help="Campaign name (partial m
     console.print(f"[dim]objective[/dim]   {c.campaign_objective or '—'}")
     console.print(f"[dim]booking[/dim]     {c.booking_link or '—'}")
     console.print(f"[dim]website[/dim]     {c.website_url or '—'}")
+    approval = "[green]on[/green]" if c.require_message_approval else "[dim]off[/dim]"
+    console.print(f"[dim]approval[/dim]    {approval}")
 
     console.print("\n[bold]Deals[/bold]")
     for r in Deal.objects.filter(campaign=c).values("state").annotate(n=Count("id")).order_by("state"):
@@ -422,6 +495,7 @@ def campaign_update(
     docs: Optional[str] = typer.Option(None, "--docs"),
     website: Optional[str] = typer.Option(None, "--website"),
     new_name: Optional[str] = typer.Option(None, "--name"),
+    require_approval: Optional[bool] = typer.Option(None, "--require-approval/--no-require-approval"),
 ):
     """Update campaign fields."""
     c = _get_campaign(name)
@@ -442,6 +516,9 @@ def campaign_update(
     if new_name is not None:
         c.name = new_name
         changed.append("name")
+    if require_approval is not None:
+        c.require_message_approval = require_approval
+        changed.append("require_message_approval")
 
     if not changed:
         console.print("[yellow]Nothing to update — pass at least one option[/yellow]")
