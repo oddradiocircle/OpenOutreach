@@ -91,9 +91,22 @@ def _sync_conversation_quietly(session, deal) -> None:
 
 def _next_followup_deal(campaign, session=None):
     """Oldest CONNECTED deal in *campaign* eligible for a new follow-up draft."""
-    from crm.models import Deal
+    from chat.models import ChatMessage
+    from crm.models import Deal, Lead
+    from django.contrib.contenttypes.models import ContentType
+    from django.db.models import OuterRef, Q, Subquery
 
-    deals = (
+    lead_ct_id = ContentType.objects.get_for_model(Lead).id
+    last_msg_is_outgoing_sq = Subquery(
+        ChatMessage.objects.filter(
+            content_type_id=lead_ct_id,
+            object_id=OuterRef("lead_id"),
+        )
+        .order_by("-creation_date")
+        .values("is_outgoing")[:1]
+    )
+
+    base = (
         Deal.objects.filter(
             campaign=campaign,
             state=ProfileState.CONNECTED,
@@ -103,13 +116,20 @@ def _next_followup_deal(campaign, session=None):
         )
         .exclude(lead_id__in=_leads_followed_up_elsewhere(campaign))
         .select_related("lead", "campaign")
-        .order_by("update_date")
+        .annotate(last_msg_is_outgoing=last_msg_is_outgoing_sq)
     )
-    for deal in deals:
+
+    # Hot path: lead replied last — skip cooldown check, return oldest immediately.
+    hot = base.filter(last_msg_is_outgoing=False).order_by("update_date").first()
+    if hot is not None:
+        return hot
+
+    # Cold path: we sent last or no messages — apply existing cooldown + sync-to-unblock.
+    for deal in base.filter(
+        Q(last_msg_is_outgoing=True) | Q(last_msg_is_outgoing__isnull=True)
+    ).order_by("update_date"):
         if not _too_soon_to_nudge(deal):
             return deal
-        # The last known message is outgoing — sync to catch any unseen reply,
-        # then re-check so a reply unblocks the deal immediately.
         if session is not None:
             _sync_conversation_quietly(session, deal)
             if not _too_soon_to_nudge(deal):
