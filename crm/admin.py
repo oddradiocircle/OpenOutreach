@@ -47,7 +47,7 @@ def _render_chat_thread(messages, highlight_pk=None):
         bubbles.append(
             f'<div style="margin-bottom:10px;text-align:{align}">'
             f'<div style="display:inline-block;max-width:75%;text-align:left;'
-            f'background:{bg};padding:8px 12px;border-radius:8px;border:{border}">'
+            f'background:{bg};color:#212529;padding:8px 12px;border-radius:8px;border:{border}">'
             f'<div style="font-size:11px;color:{label_color};font-weight:600;margin-bottom:4px">'
             f'{label} &bull; {date_str}</div>'
             f'{content_html}'
