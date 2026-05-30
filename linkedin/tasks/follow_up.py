@@ -17,6 +17,21 @@ logger = logging.getLogger(__name__)
 # 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
 MIN_DAYS_PER_UNANSWERED = 3
 
+# Unicode spaces that LinkedIn rejects (narrow no-break space, non-breaking space, etc.)
+_UNICODE_SPACES = "       　"
+
+
+def _normalize_message(text: str) -> str:
+    """Normalize message text before saving or sending.
+
+    - Replaces Unicode space variants with ASCII space (avoids LinkedIn 400).
+    - Strips carriage returns so \\r\\n → \\n, preventing Playwright from typing
+      \\r and \\n as two separate Enter keypresses (which creates double blank lines).
+    """
+    text = text.translate(str.maketrans(_UNICODE_SPACES, " " * len(_UNICODE_SPACES)))
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return text
+
 
 def _build_send_profile(deal) -> dict:
     """Minimal profile dict for ``send_raw_message`` and its fallbacks."""
@@ -103,10 +118,15 @@ def _next_followup_deal(campaign, session=None):
 
 
 def _next_approved_deal(campaign):
-    """Oldest CONNECTED deal in *campaign* with an approved message ready to send."""
+    """Oldest CONNECTED deal in *campaign* with a valid approved message ready to send.
+
+    Clears and skips drafts that became stale because the lead replied after approval.
+    """
+    from chat.models import ChatMessage
+    from django.contrib.contenttypes.models import ContentType
     from crm.models import Deal
 
-    return (
+    candidates = (
         Deal.objects.filter(
             campaign=campaign,
             state=ProfileState.CONNECTED,
@@ -118,27 +138,47 @@ def _next_approved_deal(campaign):
         .exclude(lead_id__in=_leads_followed_up_elsewhere(campaign))
         .select_related("lead", "campaign")
         .order_by("update_date")
-        .first()
     )
+    for deal in candidates:
+        ct = ContentType.objects.get_for_model(type(deal.lead))
+        last = ChatMessage.objects.filter(
+            content_type=ct, object_id=deal.lead_id
+        ).order_by("-creation_date").first()
+        if last is not None and not last.is_outgoing:
+            # Lead replied after approval — draft is stale, discard it.
+            deal.pending_message = ""
+            deal.pending_message_approved = False
+            deal.save(update_fields=["pending_message", "pending_message_approved"])
+            logger.info(
+                "[%s] discarded stale draft for %s — lead replied since approval",
+                campaign, deal.lead.public_identifier,
+            )
+            continue
+        return deal
+    return None
 
 
-def _send_approved(session, deal) -> None:
-    """Send a pre-approved pending message and clear the draft fields."""
+def _send_approved(session, deal) -> bool:
+    """Send a pre-approved pending message and clear the draft fields.
+
+    Returns True if the message was sent, False on failure (caller falls through
+    to Phase 2 so other leads in the campaign are not blocked by a stuck send).
+    """
     from linkedin.actions.message import send_raw_message
     from linkedin.db.deals import set_profile_state
     from linkedin.db.chat import sync_conversation
 
     campaign = session.campaign
     public_id = deal.lead.public_identifier
-    message = deal.pending_message
+    message = _normalize_message(deal.pending_message)
 
     logger.info("[%s] %s %s (approved)", campaign, colored("▶ follow_up", "green", attrs=["bold"]), public_id)
     logger.info("[%s] sending approved message for %s: %s", campaign, public_id, message)
 
     sent = send_raw_message(session, _build_send_profile(deal), message)
     if not sent:
-        logger.warning("follow_up for %s: approved send failed — will retry on next slot", public_id)
-        return
+        logger.warning("follow_up for %s: approved send failed — skipping to Phase 2", public_id)
+        return False
 
     session.linkedin_profile.record_action(ActionLog.ActionType.FOLLOW_UP, campaign)
     deal.pending_message = ""
@@ -149,6 +189,7 @@ def _send_approved(session, deal) -> None:
         sync_conversation(session, public_id)
     except Exception:
         logger.exception("post-send sync failed for %s (best-effort)", public_id)
+    return True
 
 
 def handle_follow_up(task, session, qualifiers):
@@ -164,9 +205,10 @@ def handle_follow_up(task, session, qualifiers):
         return
 
     # Send any pre-approved draft before generating new ones.
+    # Only stop here if the send succeeded — a failed send falls through to
+    # Phase 2 so other leads in the campaign are not blocked.
     approved = _next_approved_deal(campaign)
-    if approved:
-        _send_approved(session, approved)
+    if approved and _send_approved(session, approved):
         return
 
     deal = _next_followup_deal(campaign, session=session)
@@ -191,13 +233,14 @@ def handle_follow_up(task, session, qualifiers):
                 "[%s] follow_up draft for %s (pending approval): %s",
                 campaign, public_id, decision.message,
             )
-            deal.pending_message = decision.message
+            deal.pending_message = _normalize_message(decision.message)
             deal.pending_message_approved = False
             deal.save(update_fields=["pending_message", "pending_message_approved"])
             return
 
-        logger.info("[%s] follow_up message for %s: %s", campaign, public_id, decision.message)
-        sent = send_raw_message(session, profile, decision.message)
+        msg = _normalize_message(decision.message)
+        logger.info("[%s] follow_up message for %s: %s", campaign, public_id, msg)
+        sent = send_raw_message(session, profile, msg)
         if not sent:
             set_profile_state(session, public_id, ProfileState.QUALIFIED.value)
             logger.warning("follow_up for %s: send failed — moving to QUALIFIED for re-connection", public_id)

@@ -63,9 +63,21 @@ def _find(page, key: str, timeout: int = 5000) -> Locator:
 # ── Public entry point ────────────────────────────────────────────
 
 
+def _normalize_message(text: str) -> str:
+    """Normalize message text to prevent LinkedIn send failures.
+
+    - \r\n → \n so Playwright doesn't type \r and \n as two Enter keypresses.
+    - Unicode space variants → ASCII space (avoids Messaging API 400).
+    """
+    _UNICODE_SPACES = "             　"
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    return text.translate(str.maketrans(_UNICODE_SPACES, " " * len(_UNICODE_SPACES)))
+
+
 def send_raw_message(session, profile: Dict[str, Any], message: str) -> bool:
     """Send an arbitrary message to a profile. Returns True if sent."""
     public_identifier = profile.get("public_identifier")
+    message = _normalize_message(message)
     session.ensure_browser()
 
     if _send_message(session, profile, message):
