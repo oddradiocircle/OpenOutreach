@@ -14,7 +14,7 @@ import jinja2
 from pydantic import BaseModel, Field, model_validator
 from pydantic_ai import Agent
 
-from linkedin.conf import PROMPTS_DIR
+from linkedin.conf import CAMPAIGN_CONFIG, PROMPTS_DIR
 from linkedin.llm import get_llm_model, run_agent_sync
 
 logger = logging.getLogger(__name__)
@@ -158,6 +158,7 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
         today=now.strftime("%Y-%m-%d"),
         days_since_last_outgoing=_days_since_last_outgoing(recent_messages, now),
         unanswered_outgoing=_count_unanswered_outgoing(recent_messages),
+        reengagement_greeting_days=CAMPAIGN_CONFIG["reengagement_greeting_days"],
     )
 
 

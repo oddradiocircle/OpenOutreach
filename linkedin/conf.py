@@ -75,6 +75,9 @@ CAMPAIGN_CONFIG = {
     "burst_max_seconds": 3900,   # 65 min
     "break_min_seconds": 600,    # 10 min
     "break_max_seconds": 1200,   # 20 min
+    # Days of silence after which a follow-up nudge should re-open with a greeting.
+    # Below this threshold the LLM continues the conversation without one.
+    "reengagement_greeting_days": 3,
 }
 
 
