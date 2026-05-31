@@ -7,7 +7,7 @@
         `name`, `description`, `body` (TextField), `updated_at` (auto)
   - [ ] Write and run migration
 
-- [ ] Task 1.2: Data migration — pre-populate defaults
+- [x] Task 1.2: Data migration — pre-populate defaults (2286721)
   - [ ] Identify all 5 prompt keys and their current hardcoded sources
         (`.j2` files + vendored strings in `summaries.py`)
   - [ ] Write data migration that inserts one `PromptTemplate` row per key
