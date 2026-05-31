@@ -10,7 +10,8 @@ import numpy as np
 from pydantic import BaseModel, Field
 from scipy.stats import norm
 
-from linkedin.conf import CAMPAIGN_CONFIG, PROMPTS_DIR
+from linkedin.conf import CAMPAIGN_CONFIG
+from linkedin.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,8 @@ def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: s
 
     from linkedin.llm import get_llm_model, run_agent_sync
 
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
-    template = env.get_template("qualify_lead.j2")
+    body = get_prompt("qualification")
+    template = jinja2.Environment().from_string(body)
 
     prompt = template.render(
         product_docs=product_docs,

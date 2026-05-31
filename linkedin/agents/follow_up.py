@@ -14,8 +14,9 @@ import jinja2
 from pydantic import BaseModel, Field, model_validator
 from pydantic_ai import Agent
 
-from linkedin.conf import CAMPAIGN_CONFIG, PROMPTS_DIR
+from linkedin.conf import CAMPAIGN_CONFIG
 from linkedin.llm import get_llm_model, run_agent_sync
+from linkedin.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -134,11 +135,11 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
 
 
 def _render_system_prompt(session, deal, recent_messages: list) -> str:
-    """Render the agent system prompt from the Jinja2 template."""
+    """Render the agent system prompt, resolved from DB or hardcoded fallback."""
     from django.utils import timezone
 
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
-    template = env.get_template("follow_up_agent.j2")
+    body = get_prompt("follow_up_agent", campaign=deal.campaign)
+    template = jinja2.Environment().from_string(body)
 
     campaign = deal.campaign
     self_prof = session.self_profile

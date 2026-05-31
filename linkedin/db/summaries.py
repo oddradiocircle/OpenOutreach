@@ -110,7 +110,8 @@ def extract_facts(
 
     from linkedin.llm import get_llm_model, run_agent_sync
 
-    system = _FACT_EXTRACTION_PROMPT + _build_identity_binding(seller_name)
+    from linkedin.prompts import get_prompt
+    system = get_prompt("profile_fact_extraction") + _build_identity_binding(seller_name)
     if context:
         system = f"{system}\n\nContext for relevance:\n{context}"
 
@@ -272,8 +273,9 @@ def _request_memory_actions(
 
     from linkedin.llm import get_llm_model, run_agent_sync
 
+    from linkedin.prompts import get_prompt
     old_memory = [{"id": str(idx), "text": fact} for idx, fact in enumerate(existing)]
-    base = get_update_memory_messages(old_memory, new_facts, None)
+    base = get_update_memory_messages(old_memory, new_facts, get_prompt("chat_fact_reconciliation") or None)
     prompt = (
         f"Context: in the source conversation, [Me] is {seller_name}. "
         f"Existing facts that describe `{seller_name}` as if they were the lead "
