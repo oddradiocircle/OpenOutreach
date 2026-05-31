@@ -4,3 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
+## [~] Track: Follow-up Deal Prioritization (Replied Leads First)
+*Link: [./conductor/tracks/followup_priority_20260530/](./conductor/tracks/followup_priority_20260530/)*
