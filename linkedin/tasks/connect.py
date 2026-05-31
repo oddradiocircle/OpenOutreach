@@ -104,6 +104,7 @@ def handle_connect(task, session, qualifiers):
             set_profile_state(session, public_id, new_state.value)
             session.linkedin_profile.record_action(
                 ActionLog.ActionType.CONNECT, session.campaign,
+                lead=deal.lead if deal else None,
             )
 
     except ReachedConnectionLimit as e:

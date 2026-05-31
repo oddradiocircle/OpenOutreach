@@ -200,7 +200,7 @@ def _send_approved(session, deal) -> bool:
         logger.warning("follow_up for %s: approved send failed — skipping to Phase 2", public_id)
         return False
 
-    session.linkedin_profile.record_action(ActionLog.ActionType.FOLLOW_UP, campaign)
+    session.linkedin_profile.record_action(ActionLog.ActionType.FOLLOW_UP, campaign, lead=deal.lead)
     deal.pending_message = ""
     deal.pending_message_approved = False
     deal.save()
@@ -266,7 +266,7 @@ def handle_follow_up(task, session, qualifiers):
             logger.warning("follow_up for %s: send failed — moving to QUALIFIED for re-connection", public_id)
             return
         session.linkedin_profile.record_action(
-            ActionLog.ActionType.FOLLOW_UP, session.campaign,
+            ActionLog.ActionType.FOLLOW_UP, session.campaign, lead=deal.lead,
         )
         from linkedin.db.chat import sync_conversation
         try:

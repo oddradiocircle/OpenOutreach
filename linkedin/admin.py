@@ -74,12 +74,62 @@ class SearchKeywordAdmin(admin.ModelAdmin):
 
 @admin.register(ActionLog)
 class ActionLogAdmin(admin.ModelAdmin):
-    list_display = ("action_type", "linkedin_profile", "campaign", "daily_usage", "created_at")
+    list_display = ("action_type", "lead_col", "campaign", "daily_usage", "created_at")
     list_filter = ("action_type", "campaign")
     raw_id_fields = ("linkedin_profile", "campaign")
     date_hierarchy = "created_at"
-    readonly_fields = ("linkedin_profile", "campaign", "action_type", "created_at")
+    readonly_fields = ("linkedin_profile", "lead_detail", "campaign", "action_type", "created_at", "message_sent")
+    fields = ("action_type", "linkedin_profile", "lead_detail", "campaign", "created_at", "message_sent")
     ordering = ("-created_at",)
+
+    def lead_col(self, obj):
+        if not obj.lead_id:
+            return "—"
+        return obj.lead.public_identifier
+    lead_col.short_description = "Lead"
+
+    def lead_detail(self, obj):
+        if not obj.lead_id:
+            return "—"
+        lead = obj.lead
+        deal_url = f"/admin/crm/deal/?lead__public_identifier={lead.public_identifier}"
+        return format_html(
+            '<a href="{}" target="_blank">{}</a> &nbsp;'
+            '<small><a href="{}">ver deal →</a></small>',
+            lead.linkedin_url, lead.public_identifier, deal_url,
+        )
+    lead_detail.short_description = "Lead"
+
+    def message_sent(self, obj):
+        if not obj.lead_id:
+            return "—"
+        from chat.models import ChatMessage
+        from django.contrib.contenttypes.models import ContentType
+
+        ct = ContentType.objects.get_for_model(obj.lead.__class__)
+        msg = (
+            ChatMessage.objects
+            .filter(
+                content_type=ct,
+                object_id=obj.lead_id,
+                is_outgoing=True,
+                creation_date__lte=obj.created_at,
+            )
+            .order_by("-creation_date")
+            .first()
+        )
+        if not msg:
+            return "—"
+        date_str = msg.creation_date.strftime("%Y-%m-%d %H:%M") if msg.creation_date else ""
+        content_html = escape(msg.content).replace("\n", "<br>")
+        return mark_safe(
+            f'<div style="background:#dbeafe;color:#212529;padding:10px 14px;'
+            f'border-radius:8px;border-left:4px solid #1d4ed8;max-width:600px">'
+            f'<div style="font-size:11px;color:#1d4ed8;font-weight:600;margin-bottom:6px">'
+            f'Enviado · {date_str}</div>'
+            f'{content_html}</div>'
+        )
+    message_sent.short_description = "Mensaje enviado"
 
     def get_queryset(self, request):
         from django.db.models import IntegerField, OuterRef, Subquery

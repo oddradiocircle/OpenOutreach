@@ -117,10 +117,10 @@ class LinkedInProfile(models.Model):
 
         return True
 
-    def record_action(self, action_type: str, campaign: Campaign) -> None:
+    def record_action(self, action_type: str, campaign: Campaign, lead=None) -> None:
         """Persist a rate-limited action."""
         ActionLog.objects.create(
-            linkedin_profile=self, campaign=campaign, action_type=action_type,
+            linkedin_profile=self, campaign=campaign, action_type=action_type, lead=lead,
         )
 
     def mark_exhausted(self, action_type: str) -> None:
@@ -173,6 +173,13 @@ class ActionLog(models.Model):
     campaign = models.ForeignKey(
         Campaign,
         on_delete=models.CASCADE,
+        related_name="action_logs",
+    )
+    lead = models.ForeignKey(
+        "crm.Lead",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="action_logs",
     )
     action_type = models.CharField(max_length=20, choices=ActionType.choices)
