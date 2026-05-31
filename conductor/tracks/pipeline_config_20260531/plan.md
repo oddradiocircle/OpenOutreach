@@ -27,7 +27,7 @@
         `PromptTemplate` row → hardcoded `.j2` file fallback
   - [ ] Wire existing `.j2` template loaders to call `get_prompt()`
 
-- [ ] Task 1.6: Tests
+- [x] Task 1.6: Tests (1955fe2)
   - [ ] Global DB prompt is returned when present
   - [ ] Falls back to hardcoded `.j2` when DB row is missing
 
