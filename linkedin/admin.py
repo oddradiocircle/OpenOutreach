@@ -5,7 +5,7 @@ from django.utils.html import escape, format_html, mark_safe
 
 from chat.models import ChatMessage
 from linkedin.enums import ProfileState
-from linkedin.models import ActionLog, Campaign, LinkedInProfile, SearchKeyword, SiteConfig, Task
+from linkedin.models import ActionLog, Campaign, LinkedInProfile, PromptTemplate, SearchKeyword, SiteConfig, Task
 
 
 @admin.register(SiteConfig)
@@ -14,6 +14,23 @@ class SiteConfigAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return not SiteConfig.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(PromptTemplate)
+class PromptTemplateAdmin(admin.ModelAdmin):
+    list_display = ("key", "name", "updated_at")
+    readonly_fields = ("description",)
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        form.base_fields["body"].widget.attrs.update({"rows": 30, "cols": 120, "style": "font-family:monospace"})
+        return form
+
+    def has_add_permission(self, request):
+        return False
 
     def has_delete_permission(self, request, obj=None):
         return False
