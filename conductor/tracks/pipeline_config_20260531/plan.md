@@ -13,14 +13,12 @@
   - [ ] Write data migration that inserts one `PromptTemplate` row per key
         with the existing text as initial `body`
 
-- [ ] Task 1.3: Register in Django Admin
+- [x] Task 1.3: Register in Django Admin (08415d6)
   - [ ] `PromptTemplateAdmin` with `list_display`: key, name, updated_at
   - [ ] Large `Textarea` widget for `body` field
   - [ ] `description` field as read-only hint in change form
 
-- [ ] Task 1.4: Jinja2 syntax validation on save
-  - [ ] Add `clean()` method on `PromptTemplate` that parses `body` via
-        `jinja2.Environment().parse()` and raises `ValidationError` on syntax error
+- [x] Task 1.4: Jinja2 syntax validation on save (c125f0f)
 
 - [ ] Task 1.5: `get_prompt()` resolver
   - [ ] Create `linkedin/prompts.py` with
