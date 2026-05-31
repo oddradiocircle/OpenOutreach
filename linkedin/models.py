@@ -195,6 +195,33 @@ class ActionLog(models.Model):
         return f"{self.action_type} by {self.linkedin_profile} at {self.created_at}"
 
 
+class PromptTemplate(models.Model):
+    """Global LLM prompt template, editable via Django Admin."""
+
+    key = models.SlugField(max_length=100, unique=True)
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    body = models.TextField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        app_label = "linkedin"
+        verbose_name = "Prompt Template"
+        verbose_name_plural = "Prompt Templates"
+
+    def __str__(self):
+        return f"{self.key} — {self.name}"
+
+    def clean(self):
+        import jinja2
+        from django.core.exceptions import ValidationError
+
+        try:
+            jinja2.Environment().parse(self.body)
+        except jinja2.exceptions.TemplateSyntaxError as e:
+            raise ValidationError({"body": f"Jinja2 syntax error: {e}"})
+
+
 class TaskQuerySet(models.QuerySet):
     def pending(self):
         return self.filter(status=Task.Status.PENDING).order_by("scheduled_at")
