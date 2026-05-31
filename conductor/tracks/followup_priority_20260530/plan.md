@@ -9,4 +9,6 @@
   - [ ] Cold path: filter `base` where `last_msg_is_outgoing=True` or `IS NULL`, loop with existing `_too_soon_to_nudge` + sync-to-unblock logic unchanged
   - [ ] Remove the old single-pass `order_by("update_date")` queryset and loop
 
-- [~] Task: Conductor - User Manual Verification 'Phase 1: Implementation' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1: Implementation' (Protocol in workflow.md) (24d6ce8)
+
+## Phase 1: Implementation [checkpoint: 24d6ce8]
