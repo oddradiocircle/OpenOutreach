@@ -20,7 +20,7 @@
 
 - [x] Task 1.4: Jinja2 syntax validation on save (c125f0f)
 
-- [ ] Task 1.5: `get_prompt()` resolver
+- [x] Task 1.5: `get_prompt()` resolver (9a75169)
   - [ ] Create `linkedin/prompts.py` with
         `get_prompt(key, campaign=None) -> str`
   - [ ] Resolution order: campaign override (Phase 2) → global
