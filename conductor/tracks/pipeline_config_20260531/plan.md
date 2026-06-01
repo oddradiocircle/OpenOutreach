@@ -56,7 +56,9 @@
 
 - [x] Task 2.4: Tests (ee37223)
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md) (036c7b9)
+
+## Phase 2: Per-Campaign Prompt Overrides [checkpoint: 036c7b9]
 
 ---
 
