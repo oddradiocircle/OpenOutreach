@@ -130,7 +130,7 @@
   - [ ] When provided: trigger regeneration flow instead of hard-reject
   - [ ] When omitted: existing reject behaviour (FAILED) unchanged
 
-- [ ] Task 4.6: Tests
+- [x] Task 4.6: Tests (997cfa1)
   - [ ] `rejection_feedback` stored on deal after action
   - [ ] `regeneration_count` incremented on each rejection
   - [ ] Regenerated draft leaves deal in PENDING state
