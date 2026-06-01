@@ -5,7 +5,7 @@ from django.utils.html import escape, format_html, mark_safe
 
 from chat.models import ChatMessage
 from linkedin.enums import ProfileState
-from linkedin.models import ActionLog, Campaign, LinkedInProfile, PromptTemplate, SearchKeyword, SiteConfig, Task
+from linkedin.models import ActionLog, Campaign, CampaignPromptOverride, LinkedInProfile, PromptTemplate, SearchKeyword, SiteConfig, Task
 
 
 @admin.register(SiteConfig)
@@ -46,10 +46,41 @@ def _state_pill(count, label, color):
     )
 
 
+class CampaignPromptOverrideInline(admin.TabularInline):
+    model = CampaignPromptOverride
+    extra = 0
+    fields = ("prompt_key", "body", "_global_hint")
+    readonly_fields = ("_global_hint",)
+
+    def _global_hint(self, obj):
+        if not obj or not obj.prompt_key:
+            return "—"
+        try:
+            from linkedin.models import PromptTemplate
+            pt = PromptTemplate.objects.get(key=obj.prompt_key)
+            preview = pt.body[:200].replace("\n", " ").strip()
+            return format_html(
+                '<span style="font-size:11px;color:#666;font-family:monospace">{}</span>',
+                preview + ("…" if len(pt.body) > 200 else ""),
+            )
+        except Exception:
+            return "—"
+    _global_hint.short_description = "Global default (first 200 chars)"
+
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        if "body" in formset.form.base_fields:
+            formset.form.base_fields["body"].widget.attrs.update(
+                {"rows": 6, "style": "font-family:monospace;width:100%"}
+            )
+        return formset
+
+
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
     list_display = ("name", "deal_pipeline", "require_message_approval", "booking_link")
     filter_horizontal = ("users",)
+    inlines = [CampaignPromptOverrideInline]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
