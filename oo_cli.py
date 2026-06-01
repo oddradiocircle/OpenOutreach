@@ -1,6 +1,7 @@
 """oo — OpenOutreach local CLI."""
 import os
 import sys
+import zipfile
 from pathlib import Path
 from typing import Optional
 
@@ -63,6 +64,7 @@ OUTCOME_COLOR = {
 }
 VALID_STATES = list(STATE_COLOR.keys())
 VALID_OUTCOMES = [k for k in OUTCOME_COLOR if k]
+LINKEDIN_EXPORT_FILES = ("Connections.csv", "Invitations.csv", "messages.csv")
 
 
 def _sc(state: str) -> str:
@@ -85,6 +87,39 @@ def _get_campaign(name: str):
     except Campaign.MultipleObjectsReturned:
         console.print(f"[yellow]Multiple campaigns match '{name}' — be more specific[/yellow]")
         raise typer.Exit(1)
+
+
+def _validate_linkedin_export_zip(zip_path: Path) -> list[str]:
+    from linkedin.importers.linkedin_export import list_export_files
+
+    if not zip_path.exists():
+        console.print(f"[red]LinkedIn export ZIP not found: {zip_path}[/red]")
+        raise typer.Exit(1)
+    if not zip_path.is_file():
+        console.print(f"[red]LinkedIn export path is not a file: {zip_path}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        with zipfile.ZipFile(zip_path) as archive:
+            bad_file = archive.testzip()
+    except zipfile.BadZipFile:
+        console.print(f"[red]LinkedIn export is not a readable ZIP: {zip_path}[/red]")
+        raise typer.Exit(1)
+
+    if bad_file:
+        console.print(f"[red]LinkedIn export ZIP failed integrity check at: {bad_file}[/red]")
+        raise typer.Exit(1)
+
+    files = list_export_files(str(zip_path))
+    basenames = {path.name.casefold() for path in map(Path, files)}
+    present = [name for name in LINKEDIN_EXPORT_FILES if name.casefold() in basenames]
+    missing = [name for name in LINKEDIN_EXPORT_FILES if name.casefold() not in basenames]
+    if missing:
+        console.print(f"[yellow]Missing expected LinkedIn export files: {', '.join(missing)}[/yellow]")
+    if not present:
+        console.print("[red]No supported LinkedIn export CSV files found.[/red]")
+        raise typer.Exit(1)
+    return present
 
 
 # ── status ─────────────────────────────────────────────────────────────────────
@@ -167,6 +202,7 @@ def linkedin_import_export(
     from linkedin.models import LinkedInProfile
 
     c = _get_campaign(campaign)
+    _validate_linkedin_export_zip(zip_path)
     owner_public_ids = set(
         LinkedInProfile.objects
         .filter(user__campaigns=c, self_lead__public_identifier__isnull=False)
