@@ -31,7 +31,9 @@
   - [ ] Global DB prompt is returned when present
   - [ ] Falls back to hardcoded `.j2` when DB row is missing
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md) (079740e)
+
+## Phase 1: PromptTemplate Model & Global Admin [checkpoint: 079740e]
 
 ---
 
