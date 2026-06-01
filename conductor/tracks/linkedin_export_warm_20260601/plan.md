@@ -6,7 +6,7 @@ Create the durable campaign-specific lead queue and make it visible to
 operators.
 
 - [x] Task 1.1: Define `CampaignLead` model with source, relationship status, priority, metadata, timestamps, and uniqueness constraint d367b3f
-- [ ] Task 1.2: Create and run Django migration for `CampaignLead`
+- [x] Task 1.2: Create and run Django migration for `CampaignLead` 315f04b
 - [ ] Task 1.3: Register `CampaignLead` in Django Admin with filters and searchable lead/campaign fields
 - [ ] Task 1.4: Add tests for `CampaignLead` uniqueness and basic creation
 - [ ] Task: Conductor - User Manual Verification 'Phase 1' (Protocol in workflow.md)
