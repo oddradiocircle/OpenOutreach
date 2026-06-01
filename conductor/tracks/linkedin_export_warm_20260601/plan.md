@@ -45,7 +45,7 @@ auditable from terminal output.
 Make imported campaign leads drive qualification order and prevent already
 connected people from entering the cold connect path.
 
-- [ ] Task 4.1: Update `get_leads_for_qualification(session)` to prioritize pending `CampaignLead` rows before generic global leads
+- [x] Task 4.1: Update `get_leads_for_qualification(session)` to prioritize pending `CampaignLead` rows before generic global leads b02d378
 - [ ] Task 4.2: Add helper to resolve a lead's campaign relationship status for the active campaign
 - [ ] Task 4.3: Update positive qualification deal creation so `relationship_status=connected` creates `CONNECTED` deals directly
 - [ ] Task 4.4: Verify already-connected campaign leads are excluded from `READY_TO_CONNECT` and connect-slot consumption
