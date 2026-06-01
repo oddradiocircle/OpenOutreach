@@ -40,7 +40,7 @@ auditable from terminal output.
 
 ---
 
-## Phase 4: Qualification Priority and Warm Connected Flow
+## Phase 4: Qualification Priority and Warm Connected Flow [checkpoint: 339d696]
 
 Make imported campaign leads drive qualification order and prevent already
 connected people from entering the cold connect path.
