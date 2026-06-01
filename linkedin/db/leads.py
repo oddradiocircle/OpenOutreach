@@ -56,25 +56,34 @@ def create_enriched_lead(session, url: str, profile: Dict[str, Any]) -> Optional
 
 @transaction.atomic
 def promote_lead_to_deal(session, public_id: str, reason: str = ""):
-    """Create a QUALIFIED Deal for a Lead.
+    """Create a Deal for a positively qualified Lead.
 
+    Already-connected campaign leads are created directly as CONNECTED;
+    other leads start as QUALIFIED and proceed through the connect flow.
     Returns the Deal.
     """
-    from crm.models import Lead, Deal
+    from crm.models import CampaignLead, Lead, Deal
 
     lead = Lead.objects.filter(public_identifier=public_id).first()
     if not lead:
         raise ValueError(f"No Lead for {public_id}")
 
+    relationship_status = get_campaign_lead_relationship_status(session, public_id)
+    state = (
+        ProfileState.CONNECTED
+        if relationship_status == CampaignLead.RelationshipStatus.CONNECTED
+        else ProfileState.QUALIFIED
+    )
     deal = Deal.objects.create(
         lead=lead,
         campaign=session.campaign,
-        state=ProfileState.QUALIFIED,
+        state=state,
         reason=reason,
     )
 
     from termcolor import colored
-    logger.info("%s %s", public_id, colored("QUALIFIED", "green", attrs=["bold"]))
+    label = "CONNECTED" if state == ProfileState.CONNECTED else "QUALIFIED"
+    logger.info("%s %s", public_id, colored(label, "green", attrs=["bold"]))
     return deal
 
 
