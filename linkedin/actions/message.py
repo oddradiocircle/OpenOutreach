@@ -8,6 +8,8 @@ from linkedin.browser.nav import goto_page, human_type, dump_page_html
 logger = logging.getLogger(__name__)
 
 LINKEDIN_MESSAGING_URL = "https://www.linkedin.com/messaging/thread/new/"
+MESSAGE_TYPE_TIMEOUT_MS = 30_000
+MESSAGE_TYPE_TIMEOUT_PER_CHAR_MS = 100
 
 # Selector fallback chains: semantic/ARIA first, then class-based.
 # LinkedIn A/B tests UI variants per account and renames classes often.
@@ -74,6 +76,10 @@ def _normalize_message(text: str) -> str:
     return text.translate(str.maketrans(_UNICODE_SPACES, " " * len(_UNICODE_SPACES)))
 
 
+def _message_type_timeout_ms(message: str) -> int:
+    return max(MESSAGE_TYPE_TIMEOUT_MS, len(message) * MESSAGE_TYPE_TIMEOUT_PER_CHAR_MS)
+
+
 def send_raw_message(session, profile: Dict[str, Any], message: str) -> bool:
     """Send an arbitrary message to a profile. Returns True if sent."""
     public_identifier = profile.get("public_identifier")
@@ -122,6 +128,7 @@ def _send_message(session, profile: Dict[str, Any], message: str) -> bool:
             message,
             min_delay=10,
             max_delay=50,
+            timeout=_message_type_timeout_ms(message),
         )
         _find(session.page, "compose_send").first.click(delay=200)
         session.wait(0.5, 1)

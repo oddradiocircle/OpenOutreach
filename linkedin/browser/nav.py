@@ -106,9 +106,15 @@ def find_top_card(session):
     return top_card
 
 
-def human_type(locator, text: str, min_delay: int = HUMAN_TYPE_MIN_DELAY_MS, max_delay: int = HUMAN_TYPE_MAX_DELAY_MS):
+def human_type(
+        locator,
+        text: str,
+        min_delay: int = HUMAN_TYPE_MIN_DELAY_MS,
+        max_delay: int = HUMAN_TYPE_MAX_DELAY_MS,
+        timeout: int | None = None,
+):
     """Type text with randomized per-keystroke delay to mimic human input."""
-    locator.type(text, delay=random.randint(min_delay, max_delay))
+    locator.type(text, delay=random.randint(min_delay, max_delay), timeout=timeout)
 
 
 def dump_page_html(session: "AccountSession", profile: dict, category: str = "connect"):
