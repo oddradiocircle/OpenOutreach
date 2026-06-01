@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.contrib.admin import SimpleListFilter
 from django.contrib.contenttypes.admin import GenericTabularInline
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count
@@ -12,6 +13,27 @@ from crm.models.campaign_lead import CampaignLead
 from crm.models.deal import Deal, Outcome
 from crm.models.lead import Lead
 from linkedin.enums import ProfileState
+
+class PendingApprovalFilter(SimpleListFilter):
+    title = "Autorización"
+    parameter_name = "aprobacion"
+
+    def lookups(self, request, model_admin):
+        return [
+            ("pendiente", "⏳ Esperando autorización"),
+            ("aprobado", "✓ Aprobado"),
+            ("sin_borrador", "Sin borrador"),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == "pendiente":
+            return queryset.filter(pending_message_approved=False).exclude(pending_message="").exclude(pending_message__isnull=True)
+        if self.value() == "aprobado":
+            return queryset.filter(pending_message_approved=True).exclude(pending_message="").exclude(pending_message__isnull=True)
+        if self.value() == "sin_borrador":
+            return queryset.filter(pending_message_approved=False).filter(pending_message__in=["", None])
+        return queryset
+
 
 _STATE_COLORS = {
     ProfileState.QUALIFIED: "#6c757d",
@@ -207,7 +229,7 @@ class DealAdmin(admin.ModelAdmin):
         "conv_status", "days_idle", "message_count", "pending_status",
     )
     list_display_links = ("lead_name",)
-    list_filter = ("state", "outcome", "campaign", "pending_message_approved")
+    list_filter = ("state", "outcome", "campaign", PendingApprovalFilter)
     search_fields = ("lead__public_identifier",)
     list_select_related = ["lead", "campaign"]
     readonly_fields = (
