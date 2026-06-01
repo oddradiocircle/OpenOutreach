@@ -18,7 +18,7 @@ operators.
 Add a ZIP importer that can safely ingest LinkedIn export data without browser
 automation.
 
-- [ ] Task 2.1: Create `linkedin/importers/linkedin_export.py` with CSV helpers for ZIP reads and LinkedIn note/header handling
+- [x] Task 2.1: Create `linkedin/importers/linkedin_export.py` with CSV helpers for ZIP reads and LinkedIn note/header handling ba981af
 - [ ] Task 2.2: Implement `Connections.csv` import to create/reuse `Lead` and create/update `CampaignLead`
 - [ ] Task 2.3: Implement `Invitations.csv` import with direction/status metadata and deduplication
 - [ ] Task 2.4: Implement `messages.csv` import to deduplicate `ChatMessage` rows using stable synthetic `linkedin_urn` values
