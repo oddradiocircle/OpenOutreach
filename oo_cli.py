@@ -15,6 +15,7 @@ django.setup()
 
 from rich.console import Console
 from rich.table import Table, box as rbox
+from linkedin.tz import localfmt
 
 console = Console(highlight=False)
 
@@ -266,7 +267,7 @@ def crm_leads(disqualified: bool = typer.Option(False, "--disqualified", help="S
             lead.public_identifier or lead.linkedin_url,
             "[green]✓[/green]" if lead.embedding else "[dim]·[/dim]",
             "[red]✗[/red]" if lead.disqualified else "[dim]·[/dim]",
-            lead.creation_date.strftime("%Y-%m-%d"),
+            localfmt(lead.creation_date, "%Y-%m-%d"),
         )
     console.print(t)
     console.print(f"[dim]{qs.count()} leads[/dim]\n")
@@ -331,7 +332,7 @@ def crm_deals(
             deal.campaign.name,
             _sc(deal.state),
             _oc(deal.outcome),
-            deal.update_date.strftime("%Y-%m-%d"),
+            localfmt(deal.update_date, "%Y-%m-%d"),
         )
     console.print(t)
     console.print(f"[dim]{qs.count()} deals[/dim]\n")
@@ -374,7 +375,7 @@ def crm_deal(deal_id: int = typer.Argument(..., help="Deal ID")):
     if msgs.exists():
         console.print("\n[bold]Messages[/bold]")
         for msg in msgs:
-            ts = msg.creation_date.strftime("%Y-%m-%d %H:%M")
+            ts = localfmt(msg.creation_date)
             arrow = "[green]→[/green]" if msg.is_outgoing else "[cyan]←[/cyan]"
             console.print(f"  [dim]{ts}[/dim] {arrow} {msg.content}")
     else:
@@ -704,7 +705,7 @@ def task_list(
             str(task.pk),
             task.task_type,
             f"[{sc}]{task.status}[/{sc}]",
-            task.scheduled_at.strftime("%Y-%m-%d %H:%M") if task.scheduled_at else "—",
+            localfmt(task.scheduled_at) if task.scheduled_at else "—",
             cname,
         )
     console.print(t)
@@ -750,7 +751,7 @@ def keyword_list(campaign: Optional[str] = typer.Option(None, "--campaign")):
             kw.keyword,
             kw.campaign.name,
             "[dim]✓[/dim]" if kw.used else "·",
-            kw.used_at.strftime("%Y-%m-%d") if kw.used_at else "—",
+            localfmt(kw.used_at, "%Y-%m-%d") if kw.used_at else "—",
         )
     console.print(t)
     console.print(f"[dim]{qs.count()} keywords[/dim]\n")
@@ -841,7 +842,7 @@ def prompt_list():
     t.add_column("Chars", justify="right", width=7)
 
     for pt in rows:
-        t.add_row(pt.key, pt.name, pt.updated_at.strftime("%Y-%m-%d"), str(len(pt.body)))
+        t.add_row(pt.key, pt.name, localfmt(pt.updated_at, "%Y-%m-%d"), str(len(pt.body)))
     console.print(t)
 
 
@@ -859,7 +860,7 @@ def prompt_show(key: str = typer.Argument(..., help="Prompt key")):
     console.print(f"\n[bold]{pt.key}[/bold]  [dim]{pt.name}[/dim]")
     if pt.description:
         console.print(f"[dim]{pt.description}[/dim]")
-    console.print(f"[dim]updated {pt.updated_at.strftime('%Y-%m-%d %H:%M')}  {len(pt.body)} chars[/dim]\n")
+    console.print(f"[dim]updated {localfmt(pt.updated_at)}  {len(pt.body)} chars[/dim]\n")
     console.print(pt.body)
     console.print()
 

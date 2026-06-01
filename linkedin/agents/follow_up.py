@@ -14,7 +14,8 @@ import jinja2
 from pydantic import BaseModel, Field, model_validator
 from pydantic_ai import Agent
 
-from linkedin.llm import get_llm_model, run_agent_sync
+from linkedin.llm import get_llm_model, get_model_settings, run_agent_sync
+from linkedin.tz import get_display_tz
 from linkedin.pipeline_config import get_campaign_config
 from linkedin.prompts import get_prompt
 
@@ -146,6 +147,8 @@ def _render_system_prompt(session, deal, recent_messages: list, regeneration_fee
     self_name = f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip() or session.django_user.username
 
     now = timezone.now()
+    local_now = now.astimezone(get_display_tz())
+    lead = deal.lead
     rendered = template.render(
         self_name=self_name,
         contact_email=session.linkedin_profile.contact_email or "",
@@ -156,10 +159,13 @@ def _render_system_prompt(session, deal, recent_messages: list, regeneration_fee
         profile_summary=_format_facts(deal.profile_summary),
         chat_summary=_format_facts(deal.chat_summary),
         recent_messages=_format_recent_messages(recent_messages, now),
-        today=now.strftime("%Y-%m-%d"),
+        today=local_now.strftime("%Y-%m-%d"),
         days_since_last_outgoing=_days_since_last_outgoing(recent_messages, now),
         unanswered_outgoing=_count_unanswered_outgoing(recent_messages),
         reengagement_greeting_days=get_campaign_config(campaign).reengagement_greeting_days,
+        lead_location=lead.location or "",
+        lead_country_code=lead.country_code or "",
+        lead_languages=", ".join(lead.languages) if lead.languages else "",
     )
     if regeneration_feedback:
         rendered = (
@@ -190,7 +196,7 @@ def run_follow_up_agent(session, deal, regeneration_feedback: str | None = None)
     agent = Agent(
         get_llm_model(),
         output_type=FollowUpDecision,
-        model_settings={"temperature": 0.7, "timeout": 60},
+        model_settings=get_model_settings(deal.campaign),
     )
     decision = run_agent_sync(agent.run(system_prompt)).output
     if decision is None:

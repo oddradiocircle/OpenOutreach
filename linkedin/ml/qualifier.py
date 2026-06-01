@@ -45,14 +45,14 @@ class QualificationDecision(BaseModel):
     reason: str = Field(description="Brief explanation for the decision")
 
 
-def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: str) -> tuple[int, str]:
+def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: str, campaign=None) -> tuple[int, str]:
     """Call LLM to qualify a profile. Returns (label, reason).
 
     label: 1 = accept, 0 = reject.
     """
     from pydantic_ai import Agent
 
-    from linkedin.llm import get_llm_model, run_agent_sync
+    from linkedin.llm import get_llm_model, get_model_settings, run_agent_sync
 
     body = get_prompt("qualification")
     template = jinja2.Environment().from_string(body)
@@ -66,7 +66,7 @@ def qualify_with_llm(profile_text: str, product_docs: str, campaign_objective: s
     agent = Agent(
         get_llm_model(),
         output_type=QualificationDecision,
-        model_settings={"temperature": 0.7, "timeout": 60},
+        model_settings=get_model_settings(campaign),
     )
     decision = run_agent_sync(agent.run(prompt)).output
 

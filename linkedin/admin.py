@@ -1,16 +1,109 @@
 # linkedin/admin.py
+from django import forms
 from django.contrib import admin
 from django.db.models import Count, Q
 from django.utils.html import escape, format_html, mark_safe
+from django.utils.timezone import localtime as _localtime
 
 from chat.models import ChatMessage
 from linkedin.enums import ProfileState
 from linkedin.models import ActionLog, Campaign, CampaignPromptOverride, LinkedInProfile, PromptTemplate, SearchKeyword, SiteConfig, Task
 
 
+class TemperatureWidget(forms.NumberInput):
+    """Number input paired with a range slider and a contextual description."""
+
+    def render(self, name, value, attrs=None, renderer=None):
+        if value is None or value == "":
+            value = 0.7
+        try:
+            display = f"{float(value):.2f}"
+        except (TypeError, ValueError):
+            display = "0.70"
+        attrs = {**(attrs or {})}
+        widget_id = attrs.get("id", f"id_{name}")
+        base = super().render(name, value, {**attrs, "step": "0.05", "min": "0.0", "max": "2.0"}, renderer=renderer)
+        return mark_safe(f"""
+{base}
+<div style="margin-top:4px;display:flex;align-items:center;gap:10px">
+  <input type="range" min="0" max="2" step="0.05" value="{display}"
+         style="width:220px;cursor:pointer"
+         oninput="(function(r){{
+           var n=document.getElementById('{widget_id}');
+           n.value=parseFloat(r.value).toFixed(2);
+           document.getElementById('{widget_id}_desc').textContent=window._tempDesc(r.value);
+         }})(this)">
+  <span id="{widget_id}_desc" style="font-size:12px;color:#555;min-width:260px"></span>
+</div>
+<script>
+window._tempDesc = window._tempDesc || function(v) {{
+  v = parseFloat(v);
+  if (v === 0) return "0.0 — Determinístico: exactamente reproducible";
+  if (v < 0.3) return v.toFixed(2) + " — Muy preciso: respuestas muy consistentes";
+  if (v < 0.7) return v.toFixed(2) + " — Equilibrado: consistente con algo de variedad";
+  if (v <= 1.0) return v.toFixed(2) + " — Creativo: más variedad y expresividad";
+  return v.toFixed(2) + " — Muy creativo: alta variabilidad (puede desviarse del objetivo)";
+}};
+(function() {{
+  var n = document.getElementById('{widget_id}');
+  var desc = document.getElementById('{widget_id}_desc');
+  if (n) {{
+    desc.textContent = window._tempDesc(n.value || 0.7);
+    n.addEventListener('input', function() {{
+      var r = document.querySelector('input[type=range][oninput*=\\'{widget_id}\\']');
+      if (r) r.value = this.value;
+      desc.textContent = window._tempDesc(this.value);
+    }});
+  }}
+}})();
+</script>
+""")
+
+
+_LLM_PARAM_FIELDS = ("llm_temperature", "llm_max_tokens")
+
+
 @admin.register(SiteConfig)
 class SiteConfigAdmin(admin.ModelAdmin):
     list_display = ("__str__", "llm_provider", "ai_model", "llm_api_base")
+    fieldsets = (
+        ("Proveedor LLM", {
+            "fields": ("llm_provider", "llm_api_key", "ai_model", "llm_api_base"),
+        }),
+        ("Parámetros de generación", {
+            "fields": ("llm_temperature", "llm_max_tokens"),
+            "description": (
+                "Controlan el comportamiento del modelo en todas las tareas de generación "
+                "(follow-up, calificación, palabras clave). "
+                "Las tareas de extracción de hechos siempre usan temperatura 0."
+            ),
+        }),
+        ("Regional", {
+            "fields": ("display_timezone",),
+        }),
+    )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        if "llm_temperature" in form.base_fields:
+            form.base_fields["llm_temperature"].widget = TemperatureWidget()
+            form.base_fields["llm_temperature"].help_text = (
+                "Temperatura del modelo (0.0 – 2.0). Controla la aleatoriedad: "
+                "0 = completamente determinístico, 0.7 = equilibrado (por defecto), "
+                "≥1.0 = muy creativo."
+            )
+        if "llm_max_tokens" in form.base_fields:
+            form.base_fields["llm_max_tokens"].help_text = (
+                "Máximo de tokens en la respuesta. Vacío = usar el límite por defecto del proveedor. "
+                "Útil para controlar costos o evitar respuestas largas innecesarias."
+            )
+        if "display_timezone" in form.base_fields:
+            form.base_fields["display_timezone"].help_text = (
+                "Zona horaria para mostrar fechas en el Admin y la CLI (nombre IANA, ej. "
+                '"America/Bogota", "America/New_York", "Europe/Madrid"). '
+                "Por defecto: America/Bogota (UTC-5)."
+            )
+        return form
 
     def has_add_permission(self, request):
         return not SiteConfig.objects.exists()
@@ -99,6 +192,14 @@ class CampaignAdmin(admin.ModelAdmin):
             "fields": ("name", "users", "product_docs", "campaign_objective",
                        "booking_link", "website_url", "require_message_approval"),
         }),
+        ("Parámetros LLM (overrides)", {
+            "classes": ("collapse",),
+            "fields": _LLM_PARAM_FIELDS,
+            "description": (
+                "Overrides por campaña para los parámetros de generación LLM. "
+                "Vacío = heredar el valor global de Site Configuration."
+            ),
+        }),
         ("Pipeline Conditions (overrides)", {
             "classes": ("collapse",),
             "fields": _PIPELINE_CONDITION_FIELDS,
@@ -112,6 +213,25 @@ class CampaignAdmin(admin.ModelAdmin):
             site = SiteConfig.load()
         except Exception:
             return form
+
+        # LLM parameter fields with slider widget and global default hints
+        if "llm_temperature" in form.base_fields:
+            form.base_fields["llm_temperature"].widget = TemperatureWidget(
+                attrs={"placeholder": f"{site.llm_temperature:.2f}"}
+            )
+            form.base_fields["llm_temperature"].help_text = (
+                f"Override de temperatura (0.0 – 2.0). "
+                f"Global actual: {site.llm_temperature:.2f}. "
+                f"Vacío = heredar global."
+            )
+        if "llm_max_tokens" in form.base_fields:
+            max_tok_hint = str(site.llm_max_tokens) if site.llm_max_tokens else "límite del proveedor"
+            form.base_fields["llm_max_tokens"].help_text = (
+                f"Override de max tokens. "
+                f"Global actual: {max_tok_hint}. "
+                f"Vacío = heredar global."
+            )
+
         hints = {
             "follow_up_cooldown_hours": f"Global default: {site.follow_up_cooldown_hours} h",
             "reengagement_greeting_days": f"Global default: {site.reengagement_greeting_days} days",
@@ -218,7 +338,7 @@ class ActionLogAdmin(admin.ModelAdmin):
         )
         if not msg:
             return "—"
-        date_str = msg.creation_date.strftime("%Y-%m-%d %H:%M") if msg.creation_date else ""
+        date_str = _localtime(msg.creation_date).strftime("%Y-%m-%d %H:%M") if msg.creation_date else ""
         content_html = escape(msg.content).replace("\n", "<br>")
         return mark_safe(
             f'<div style="background:#dbeafe;color:#212529;padding:10px 14px;'

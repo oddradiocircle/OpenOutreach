@@ -16,6 +16,9 @@ class Lead(models.Model):
     linkedin_url = models.URLField(max_length=200, unique=True)
     public_identifier = models.CharField(max_length=200, unique=True)
     urn = models.CharField(max_length=200, null=True, blank=True, unique=True, db_index=True)
+    location = models.CharField(max_length=300, blank=True, default="")
+    country_code = models.CharField(max_length=10, blank=True, default="")
+    languages = models.JSONField(default=list, blank=True)
     embedding = models.BinaryField(null=True, blank=True)
     disqualified = models.BooleanField(default=False)
     creation_date = models.DateTimeField(default=timezone.now)
@@ -53,12 +56,31 @@ class Lead(models.Model):
             return None
 
         urn = profile.get("urn") or None
+        update_fields = []
         if urn and self.urn != urn:
             if Lead.objects.filter(urn=urn).exclude(pk=self.pk).exists():
                 logger.warning("URN %s already owned by another lead — skipping for %s", urn, self.public_identifier)
             else:
                 self.urn = urn
-                self.save(update_fields=["urn"])
+                update_fields.append("urn")
+
+        location = profile.get("location_name") or ""
+        if location and self.location != location:
+            self.location = location
+            update_fields.append("location")
+
+        country_code = profile.get("country_code") or ""
+        if country_code and self.country_code != country_code:
+            self.country_code = country_code
+            update_fields.append("country_code")
+
+        languages = profile.get("supported_locales") or []
+        if languages and self.languages != languages:
+            self.languages = languages
+            update_fields.append("languages")
+
+        if update_fields:
+            self.save(update_fields=update_fields)
 
         return profile
 

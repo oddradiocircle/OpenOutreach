@@ -100,6 +100,7 @@ def run_qualification(session, qualifier: BayesianQualifier) -> str | None:
         profile_text,
         product_docs=campaign.product_docs,
         campaign_objective=campaign.campaign_objective,
+        campaign=campaign,
     )
     _save_qualification_result(session, qualifier, lead_id, public_id, embedding, label, reason)
     return public_id

@@ -5,6 +5,7 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
+from django.utils.timezone import localtime as _localtime
 
 from chat.models import ChatMessage
 from crm.models.campaign_lead import CampaignLead
@@ -44,7 +45,7 @@ def _render_chat_thread(messages, highlight_pk=None):
         else:
             bg, align, label, label_color = "#dcfce7", "left", "← Recibido", "#15803d"
         border = "2px solid #1d4ed8" if msg.pk == highlight_pk else "1px solid transparent"
-        date_str = msg.creation_date.strftime("%Y-%m-%d %H:%M")
+        date_str = _localtime(msg.creation_date).strftime("%Y-%m-%d %H:%M")
         content_html = escape(msg.content).replace("\n", "<br>")
         bubbles.append(
             f'<div style="margin-bottom:10px;text-align:{align}">'
@@ -318,7 +319,7 @@ class DealAdmin(admin.ModelAdmin):
         now = timezone.now()
         if msg_date:
             delta = now - msg_date
-            age = f"{delta.days}d" if delta.days else f"{max(int(delta.total_seconds() // 3600), 1)}h"
+            age = f"{delta.days}d" if delta.days >= 1 else f"{max(int(delta.total_seconds() // 3600), 1)}h"
         else:
             age = "?"
         if not is_outgoing:

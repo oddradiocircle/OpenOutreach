@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db.models import Count
 from django.utils import timezone
+from linkedin.tz import localfmt
 
 
 class Command(BaseCommand):
@@ -58,7 +59,7 @@ class Command(BaseCommand):
             mins = int(delta.total_seconds() / 60)
             self.stdout.write(
                 f"\n  Next: {next_task['task_type']} in {mins}m"
-                f" (scheduled {next_task['scheduled_at'].strftime('%H:%M')})"
+                f" (scheduled {localfmt(next_task['scheduled_at'], '%H:%M')})"
             )
 
         # --- Activity today --------------------------------------------------

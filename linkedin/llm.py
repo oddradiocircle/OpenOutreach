@@ -172,3 +172,32 @@ def get_llm_model():
     if builder is None:
         raise ValueError(f"Unknown LLM provider: {cfg.llm_provider!r}")
     return builder(cfg)
+
+
+def get_model_settings(campaign=None, *, temperature_override: float | None = None) -> dict:
+    """Return pydantic-ai model_settings resolved from SiteConfig + optional campaign override.
+
+    Args:
+        campaign: Campaign instance for per-campaign overrides. None = global defaults only.
+        temperature_override: Hard-coded temperature (e.g. 0.0 for extraction tasks).
+            When set, bypasses all configurable temperature — use for deterministic tasks.
+    """
+    from linkedin.models import SiteConfig
+
+    cfg = SiteConfig.load()
+    temperature = cfg.llm_temperature
+    max_tokens = cfg.llm_max_tokens
+
+    if campaign is not None:
+        if campaign.llm_temperature is not None:
+            temperature = campaign.llm_temperature
+        if campaign.llm_max_tokens is not None:
+            max_tokens = campaign.llm_max_tokens
+
+    settings: dict = {
+        "temperature": temperature if temperature_override is None else temperature_override,
+        "timeout": 60,
+    }
+    if max_tokens is not None:
+        settings["max_tokens"] = max_tokens
+    return settings

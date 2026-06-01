@@ -1,4 +1,5 @@
 from django.core.management.base import BaseCommand, CommandError
+from linkedin.tz import localfmt
 
 STATE_COLORS = {
     "qualified": "cyan",
@@ -75,7 +76,7 @@ class Command(BaseCommand):
                 lead.public_identifier or lead.linkedin_url,
                 "[green]✓[/green]" if lead.embedding else "[dim]·[/dim]",
                 "[red]✗[/red]" if lead.disqualified else "[dim]·[/dim]",
-                lead.creation_date.strftime("%Y-%m-%d"),
+                localfmt(lead.creation_date, "%Y-%m-%d"),
             )
 
         self.console.print(table)
@@ -108,7 +109,7 @@ class Command(BaseCommand):
                 deal.campaign.name,
                 f"[{sc}]{deal.state}[/{sc}]",
                 f"[{oc}]{deal.outcome or '—'}[/{oc}]",
-                deal.update_date.strftime("%Y-%m-%d"),
+                localfmt(deal.update_date, "%Y-%m-%d"),
             )
 
         self.console.print(table)
@@ -153,7 +154,7 @@ class Command(BaseCommand):
         if messages.exists():
             self.console.print("\n[bold]Messages[/bold]")
             for msg in messages:
-                ts = msg.creation_date.strftime("%Y-%m-%d %H:%M")
+                ts = localfmt(msg.creation_date)
                 direction = "[green]→[/green]" if msg.is_outgoing else "[cyan]←[/cyan]"
                 self.console.print(f"  [dim]{ts}[/dim] {direction} {msg.content}")
         else:

@@ -38,6 +38,13 @@ class SiteConfig(models.Model):
     ai_model = models.CharField(max_length=200, blank=True, default="")
     llm_api_base = models.CharField(max_length=500, blank=True, default="")
 
+    # LLM generation parameters
+    llm_temperature = models.FloatField(default=0.7)
+    llm_max_tokens = models.PositiveIntegerField(null=True, blank=True)
+
+    # Display timezone for admin / CLI (IANA name, e.g. "America/Bogota")
+    display_timezone = models.CharField(max_length=100, default="America/Bogota")
+
     # Pipeline condition defaults
     follow_up_cooldown_hours = models.PositiveIntegerField(default=72)
     reengagement_greeting_days = models.PositiveIntegerField(default=3)
@@ -76,6 +83,10 @@ class Campaign(models.Model):
     website_url = models.URLField(max_length=500, blank=True)
     require_message_approval = models.BooleanField(default=False)
     model_blob = models.BinaryField(null=True, blank=True)
+
+    # Per-campaign LLM generation parameter overrides (null = inherit from SiteConfig)
+    llm_temperature = models.FloatField(null=True, blank=True)
+    llm_max_tokens = models.PositiveIntegerField(null=True, blank=True)
 
     # Per-campaign pipeline condition overrides (null = inherit from SiteConfig)
     follow_up_cooldown_hours = models.PositiveIntegerField(null=True, blank=True)

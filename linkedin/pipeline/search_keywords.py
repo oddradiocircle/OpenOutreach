@@ -22,6 +22,7 @@ def generate_search_keywords(
     campaign_objective: str,
     n_keywords: int = 10,
     exclude_keywords: list[str] | None = None,
+    campaign=None,
 ) -> list[str]:
     """Call LLM to generate LinkedIn search keywords from campaign context.
 
@@ -29,7 +30,7 @@ def generate_search_keywords(
     """
     from pydantic_ai import Agent
 
-    from linkedin.llm import get_llm_model, run_agent_sync
+    from linkedin.llm import get_llm_model, get_model_settings, run_agent_sync
 
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(PROMPTS_DIR)))
     template = env.get_template("search_keywords.j2")
@@ -44,7 +45,7 @@ def generate_search_keywords(
     agent = Agent(
         get_llm_model(),
         output_type=SearchKeywords,
-        model_settings={"temperature": 0.9},
+        model_settings=get_model_settings(campaign),
     )
     result = run_agent_sync(agent.run(prompt)).output
 
