@@ -340,12 +340,19 @@ def crm_approve(deal_id: int = typer.Argument(..., help="Deal ID")):
 
 
 @crm_app.command("reject")
-def crm_reject(deal_id: int = typer.Argument(..., help="Deal ID")):
-    """Discard a pending follow-up draft — daemon will generate a new one next cycle."""
+def crm_reject(
+    deal_id: int = typer.Argument(..., help="Deal ID"),
+    feedback: Optional[str] = typer.Option(None, "--feedback", "-f", help="Feedback for regeneration. When provided, dispatches an immediate regeneration instead of a hard reject."),
+):
+    """Discard or regenerate a pending follow-up draft.
+
+    Without --feedback: hard reject — draft cleared, daemon generates a fresh one next cycle.
+    With --feedback: reject with instructions — triggers immediate regeneration incorporating the feedback.
+    """
     from crm.models.deal import Deal
 
     try:
-        deal = Deal.objects.select_related("lead").get(pk=deal_id)
+        deal = Deal.objects.select_related("lead", "campaign").get(pk=deal_id)
     except Deal.DoesNotExist:
         console.print(f"[red]Deal {deal_id} not found[/red]")
         raise typer.Exit(1)
@@ -354,10 +361,31 @@ def crm_reject(deal_id: int = typer.Argument(..., help="Deal ID")):
         console.print(f"[yellow]Deal {deal_id} has no pending draft[/yellow]")
         raise typer.Exit(1)
 
-    deal.pending_message = ""
-    deal.pending_message_approved = False
-    deal.save(update_fields=["pending_message", "pending_message_approved"])
-    console.print(f"[yellow]Deal {deal_id} ({deal.lead.public_identifier}): draft discarded[/yellow]")
+    if feedback:
+        from django.utils import timezone
+        from linkedin.models import Task
+        from linkedin.enums import ProfileState
+
+        deal.rejection_feedback = feedback
+        deal.regeneration_count = (deal.regeneration_count or 0) + 1
+        deal.pending_message = ""
+        deal.pending_message_approved = False
+        deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved"])
+        Task.objects.create(
+            task_type=Task.TaskType.FOLLOW_UP,
+            scheduled_at=timezone.now(),
+            payload={
+                "campaign_id": deal.campaign_id,
+                "deal_id": deal.pk,
+                "regeneration_feedback": feedback,
+            },
+        )
+        console.print(f"[cyan]Deal {deal_id} ({deal.lead.public_identifier}): regeneration dispatched with feedback[/cyan]")
+    else:
+        deal.pending_message = ""
+        deal.pending_message_approved = False
+        deal.save(update_fields=["pending_message", "pending_message_approved"])
+        console.print(f"[yellow]Deal {deal_id} ({deal.lead.public_identifier}): draft discarded[/yellow]")
 
 
 @crm_app.command("set-state")
