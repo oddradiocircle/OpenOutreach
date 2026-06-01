@@ -44,3 +44,50 @@ def test_get_prompt_falls_back_to_inline_for_chat_fact_reconciliation():
     result = get_prompt("chat_fact_reconciliation")
     assert "ADD" in result
     assert "DELETE" in result
+
+
+@pytest.mark.django_db
+def test_get_prompt_campaign_override_takes_precedence():
+    from linkedin.models import Campaign, CampaignPromptOverride
+
+    campaign = Campaign.objects.create(name="Test Campaign A")
+    CampaignPromptOverride.objects.create(
+        campaign=campaign,
+        prompt_key="qualification",
+        body="CAMPAIGN SPECIFIC PROMPT",
+    )
+    result = get_prompt("qualification", campaign=campaign)
+    assert result == "CAMPAIGN SPECIFIC PROMPT"
+
+
+@pytest.mark.django_db
+def test_get_prompt_other_campaign_unaffected_by_override():
+    from linkedin.models import Campaign, CampaignPromptOverride
+
+    campaign_a = Campaign.objects.create(name="Campaign A")
+    campaign_b = Campaign.objects.create(name="Campaign B")
+
+    CampaignPromptOverride.objects.create(
+        campaign=campaign_a,
+        prompt_key="qualification",
+        body="OVERRIDE FOR CAMPAIGN A",
+    )
+
+    result_b = get_prompt("qualification", campaign=campaign_b)
+    assert result_b != "OVERRIDE FOR CAMPAIGN A"
+    assert len(result_b) > 50  # global PromptTemplate body
+
+
+@pytest.mark.django_db
+def test_get_prompt_no_campaign_ignores_override():
+    from linkedin.models import Campaign, CampaignPromptOverride
+
+    campaign = Campaign.objects.create(name="Test Campaign C")
+    CampaignPromptOverride.objects.create(
+        campaign=campaign,
+        prompt_key="qualification",
+        body="CAMPAIGN SPECIFIC PROMPT",
+    )
+    # Without campaign= arg, global PromptTemplate is returned
+    result = get_prompt("qualification")
+    assert result != "CAMPAIGN SPECIFIC PROMPT"
