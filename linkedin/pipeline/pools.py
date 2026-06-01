@@ -129,12 +129,16 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
 
 def ready_source(session, qualifier: BayesianQualifier, threshold: float | None = None) -> Generator[dict, None, None]:
     """Yield ready-to-connect candidates, pulling from qualify when needed."""
+    campaign = getattr(session, "campaign", None)
+    cfg = get_campaign_config(campaign)
     if threshold is None:
-        campaign = getattr(session, "campaign", None)
-        threshold = get_campaign_config(campaign).gpr_qualification_threshold
+        threshold = cfg.gpr_qualification_threshold
     qualify = qualify_source(session, qualifier)
 
     while True:
+        if _run_preconnect_qualification_guard(session, qualifier, cfg) > 0:
+            continue
+
         candidate = find_ready_candidate(session, qualifier)
         if candidate is not None:
             yield candidate
@@ -152,6 +156,34 @@ def ready_source(session, qualifier: BayesianQualifier, threshold: float | None 
 
         # Upstream exhausted
         return
+
+
+def _run_preconnect_qualification_guard(session, qualifier: BayesianQualifier, cfg) -> int:
+    """Qualify a bounded pending batch before cold connect candidates are used."""
+    min_obs = cfg.min_qualification_observations_before_connect
+    batch_size = cfg.preconnect_qualification_batch_size
+    if qualifier is None or min_obs <= 0 or batch_size <= 0:
+        return 0
+    if qualifier.n_obs >= min_obs:
+        return 0
+
+    qualified = 0
+    for _ in range(batch_size):
+        if qualifier.n_obs >= min_obs:
+            break
+        if not fetch_qualification_candidates(session):
+            break
+        if run_qualification(session, qualifier) is None:
+            break
+        qualified += 1
+
+    if qualified:
+        logger.info(
+            "Pre-connect guard qualified %d lead(s) before connect candidate selection "
+            "(n_obs=%d, min=%d)",
+            qualified, qualifier.n_obs, min_obs,
+        )
+    return qualified
 
 
 def find_candidate(session, qualifier: BayesianQualifier) -> dict | None:
