@@ -146,6 +146,26 @@ class TestPromoteLeadToDeal:
         assert deal.state == ProfileState.QUALIFIED
         assert Deal.objects.count() == 1
 
+    def test_connected_campaign_lead_creates_connected_deal(self, fake_session):
+        from crm.models import CampaignLead, Deal, Lead
+
+        lead = Lead.objects.create(
+            public_identifier="connected-warm",
+            linkedin_url="https://www.linkedin.com/in/connected-warm/",
+        )
+        CampaignLead.objects.create(
+            campaign=fake_session.campaign,
+            lead=lead,
+            source=CampaignLead.Source.LINKEDIN_CONNECTION,
+            relationship_status=CampaignLead.RelationshipStatus.CONNECTED,
+            priority=10,
+        )
+
+        deal = promote_lead_to_deal(fake_session, "connected-warm")
+
+        assert deal.state == ProfileState.CONNECTED
+        assert Deal.objects.get(pk=deal.pk).state == ProfileState.CONNECTED
+
 @pytest.mark.django_db
 class TestGetLeadsForQualification:
     def test_returns_enriched_leads(self, fake_session):
@@ -193,6 +213,45 @@ class TestGetLeadsForQualification:
             {**SAMPLE_PROFILE, "urn": "urn:li:fsd_profile:BOB456"},
         )
         assert len(get_leads_for_qualification(fake_session)) == 2
+
+    def test_campaign_leads_are_ordered_before_global_fallback(self, fake_session):
+        from crm.models import CampaignLead, Lead
+
+        generic = Lead.objects.create(
+            public_identifier="generic",
+            linkedin_url="https://www.linkedin.com/in/generic/",
+        )
+        lower_priority = Lead.objects.create(
+            public_identifier="lower-priority",
+            linkedin_url="https://www.linkedin.com/in/lower-priority/",
+        )
+        higher_priority = Lead.objects.create(
+            public_identifier="higher-priority",
+            linkedin_url="https://www.linkedin.com/in/higher-priority/",
+        )
+        CampaignLead.objects.create(
+            campaign=fake_session.campaign,
+            lead=lower_priority,
+            priority=20,
+            source=CampaignLead.Source.MANUAL,
+        )
+        CampaignLead.objects.create(
+            campaign=fake_session.campaign,
+            lead=higher_priority,
+            priority=5,
+            source=CampaignLead.Source.LINKEDIN_CONNECTION,
+            relationship_status=CampaignLead.RelationshipStatus.CONNECTED,
+        )
+
+        leads = get_leads_for_qualification(fake_session)
+
+        assert [lead["public_identifier"] for lead in leads] == [
+            "higher-priority",
+            "lower-priority",
+            "generic",
+        ]
+        assert leads[0]["meta"]["relationship_status"] == CampaignLead.RelationshipStatus.CONNECTED
+        assert leads[0]["meta"]["priority"] == 5
 
 
 @pytest.mark.django_db
