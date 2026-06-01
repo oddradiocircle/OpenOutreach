@@ -70,6 +70,30 @@ class TestPromoteToReady:
         scorer = BayesianQualifier(seed=42)
         assert promote_to_ready(fake_session, scorer, threshold=0.9) == 0
 
+    def test_connected_campaign_lead_is_not_promoted_to_ready(self, fake_session):
+        from crm.models import CampaignLead, Deal, Lead
+
+        lead = Lead.objects.create(
+            public_identifier="warm-connected",
+            linkedin_url="https://www.linkedin.com/in/warm-connected/",
+            embedding=np.ones(384, dtype=np.float32).tobytes(),
+        )
+        CampaignLead.objects.create(
+            campaign=fake_session.campaign,
+            lead=lead,
+            relationship_status=CampaignLead.RelationshipStatus.CONNECTED,
+            source=CampaignLead.Source.LINKEDIN_CONNECTION,
+        )
+        promote_lead_to_deal(fake_session, "warm-connected")
+
+        scorer = BayesianQualifier(seed=42)
+        with patch.object(scorer, "predict_probs", return_value=np.array([0.99])) as mock_predict:
+            assert promote_to_ready(fake_session, scorer, threshold=0.9) == 0
+
+        deal = Deal.objects.get(lead=lead, campaign=fake_session.campaign)
+        assert deal.state == ProfileState.CONNECTED
+        mock_predict.assert_not_called()
+
 
 @pytest.mark.django_db
 class TestGetReadyCandidate:
