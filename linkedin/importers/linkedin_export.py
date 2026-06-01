@@ -275,7 +275,9 @@ def _looks_like_header(row: list[str]) -> bool:
     if not row:
         return False
     lowered = {cell.casefold() for cell in row if cell}
-    return bool(lowered & {"url", "profile url", "from", "to", "sent date", "date"})
+    return bool(lowered & {"url", "profile url", "from", "to", "sent date", "date"}) or any(
+        cell.endswith("profile url") for cell in lowered
+    )
 
 
 def _normalize_cell(value: str | None) -> str:
@@ -333,6 +335,8 @@ def _parse_date(value: str) -> date | None:
 
 
 def _parse_datetime(value: str) -> datetime | None:
+    from django.utils import timezone
+
     if not value:
         return None
     for fmt in (
@@ -347,12 +351,14 @@ def _parse_datetime(value: str) -> datetime | None:
         "%d %B %Y, %H:%M",
     ):
         try:
-            return datetime.strptime(value, fmt)
+            parsed = datetime.strptime(value, fmt)
+            return timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
         except ValueError:
             continue
     parsed_date = _parse_date(value)
     if parsed_date:
-        return datetime.combine(parsed_date, datetime.min.time())
+        parsed = datetime.combine(parsed_date, datetime.min.time())
+        return timezone.make_aware(parsed)
     return None
 
 
