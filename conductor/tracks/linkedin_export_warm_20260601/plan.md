@@ -75,6 +75,6 @@ LinkedIn export fixture.
 
 - [x] Task 6.1: Update `ARCHITECTURE.md` and relevant docs with `CampaignLead`, import command, and warm lead lifecycle 114fad2
 - [x] Task 6.2: Add a small documented manual test plan for importing a LinkedIn export into the Red Warm campaign 351c275
-- [x] Task 6.3: Run targeted tests and full `pytest` (targeted 86 passed; full pytest hung at `tests/browser/test_connect_selectors.py`)
+- [x] Task 6.3: Run targeted tests and full `pytest` c030b3f (targeted 86 passed; full pytest hung at `tests/browser/test_connect_selectors.py`)
 - [ ] Task 6.4: Confirm no import path triggers browser automation, connection requests, or message sends
 - [ ] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md)
