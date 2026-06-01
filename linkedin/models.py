@@ -222,6 +222,38 @@ class PromptTemplate(models.Model):
             raise ValidationError({"body": f"Jinja2 syntax error: {e}"})
 
 
+PROMPT_KEYS = [
+    "qualification",
+    "follow_up_agent",
+    "profile_fact_extraction",
+    "chat_fact_reconciliation",
+    "connection_message",
+]
+
+_PROMPT_KEY_CHOICES = [(k, k) for k in PROMPT_KEYS]
+
+
+class CampaignPromptOverride(models.Model):
+    """Per-campaign override for a single LLM prompt template."""
+
+    campaign = models.ForeignKey(
+        Campaign,
+        on_delete=models.CASCADE,
+        related_name="prompt_overrides",
+    )
+    prompt_key = models.CharField(max_length=100, choices=_PROMPT_KEY_CHOICES)
+    body = models.TextField()
+
+    class Meta:
+        app_label = "linkedin"
+        unique_together = [("campaign", "prompt_key")]
+        verbose_name = "Campaign Prompt Override"
+        verbose_name_plural = "Campaign Prompt Overrides"
+
+    def __str__(self):
+        return f"{self.campaign} / {self.prompt_key}"
+
+
 class TaskQuerySet(models.QuerySet):
     def pending(self):
         return self.filter(status=Task.Status.PENDING).order_by("scheduled_at")
