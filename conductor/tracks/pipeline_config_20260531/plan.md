@@ -125,7 +125,7 @@
 
 - [x] Task 4.4: `DealAdmin` read-only display (d801c16)
 
-- [ ] Task 4.5: CLI `--feedback` flag
+- [x] Task 4.5: CLI `--feedback` flag (7dc2105)
   - [ ] Add `--feedback` option to `oo crm reject <deal-id>` command
   - [ ] When provided: trigger regeneration flow instead of hard-reject
   - [ ] When omitted: existing reject behaviour (FAILED) unchanged
