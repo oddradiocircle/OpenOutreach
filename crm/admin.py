@@ -127,11 +127,22 @@ class DealAdmin(admin.ModelAdmin):
         "connect_attempts", "backoff_hours", "next_check_pending_at",
         "profile_summary_display", "chat_summary_display",
         "conversation_thread", "creation_date", "update_date",
-        "rejection_feedback", "regeneration_count",
+        "rejection_feedback", "regeneration_count", "pending_message_created_at",
     )
     fields = readonly_fields + ("pending_message", "pending_message_approved")
     date_hierarchy = "creation_date"
     actions = ["reject_and_regenerate"]
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if change and "pending_message_approved" in form.changed_data and obj.pending_message_approved and obj.pending_message:
+            from django.utils import timezone as tz
+            from linkedin.models import Task
+            Task.objects.create(
+                task_type=Task.TaskType.FOLLOW_UP,
+                scheduled_at=tz.now(),
+                payload={"campaign_id": obj.campaign_id},
+            )
 
     def get_urls(self):
         urls = super().get_urls()
@@ -160,7 +171,8 @@ class DealAdmin(admin.ModelAdmin):
                     deal.regeneration_count = (deal.regeneration_count or 0) + 1
                     deal.pending_message = ""
                     deal.pending_message_approved = False
-                    deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved"])
+                    deal.pending_message_created_at = None
+                    deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved", "pending_message_created_at"])
                     Task.objects.create(
                         task_type=Task.TaskType.FOLLOW_UP,
                         scheduled_at=tz.now(),

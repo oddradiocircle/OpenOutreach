@@ -183,16 +183,22 @@ def _next_approved_deal(campaign):
         last = ChatMessage.objects.filter(
             content_type=ct, object_id=deal.lead_id
         ).order_by("-creation_date").first()
+        # Discard only if the lead replied AFTER the draft was created.
+        # Without the timestamp check the stale guard fires on every hot-path
+        # draft (lead's reply is always the last message when we draft a
+        # response to them), causing an infinite discard loop.
         if last is not None and not last.is_outgoing:
-            # Lead replied after approval — draft is stale, discard it.
-            deal.pending_message = ""
-            deal.pending_message_approved = False
-            deal.save(update_fields=["pending_message", "pending_message_approved"])
-            logger.info(
-                "[%s] discarded stale draft for %s — lead replied since approval",
-                campaign, deal.lead.public_identifier,
-            )
-            continue
+            draft_ts = deal.pending_message_created_at
+            if draft_ts is None or last.creation_date > draft_ts:
+                deal.pending_message = ""
+                deal.pending_message_approved = False
+                deal.pending_message_created_at = None
+                deal.save(update_fields=["pending_message", "pending_message_approved", "pending_message_created_at"])
+                logger.info(
+                    "[%s] discarded stale draft for %s — lead replied since draft was created",
+                    campaign, deal.lead.public_identifier,
+                )
+                continue
         return deal
     return None
 
@@ -222,6 +228,7 @@ def _send_approved(session, deal) -> bool:
     session.linkedin_profile.record_action(ActionLog.ActionType.FOLLOW_UP, campaign, lead=deal.lead)
     deal.pending_message = ""
     deal.pending_message_approved = False
+    deal.pending_message_created_at = None
     deal.save()
 
     try:
@@ -304,7 +311,8 @@ def handle_follow_up(task, session, qualifiers):
             )
             deal.pending_message = _normalize_message(decision.message)
             deal.pending_message_approved = False
-            deal.save(update_fields=["pending_message", "pending_message_approved"])
+            deal.pending_message_created_at = timezone.now()
+            deal.save(update_fields=["pending_message", "pending_message_approved", "pending_message_created_at"])
             return
 
         msg = _normalize_message(decision.message)

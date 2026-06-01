@@ -335,7 +335,15 @@ def crm_approve(deal_id: int = typer.Argument(..., help="Deal ID")):
 
     deal.pending_message_approved = True
     deal.save(update_fields=["pending_message_approved"])
-    console.print(f"[green]Deal {deal_id} ({deal.lead.public_identifier}): draft approved — will send on next daemon cycle[/green]")
+
+    from django.utils import timezone
+    from linkedin.models import Task
+    Task.objects.create(
+        task_type=Task.TaskType.FOLLOW_UP,
+        scheduled_at=timezone.now(),
+        payload={"campaign_id": deal.campaign_id},
+    )
+    console.print(f"[green]Deal {deal_id} ({deal.lead.public_identifier}): draft approved — immediate send task queued[/green]")
     console.print(f"[dim]{deal.pending_message}[/dim]")
 
 
@@ -370,7 +378,8 @@ def crm_reject(
         deal.regeneration_count = (deal.regeneration_count or 0) + 1
         deal.pending_message = ""
         deal.pending_message_approved = False
-        deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved"])
+        deal.pending_message_created_at = None
+        deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved", "pending_message_created_at"])
         Task.objects.create(
             task_type=Task.TaskType.FOLLOW_UP,
             scheduled_at=timezone.now(),
@@ -384,7 +393,8 @@ def crm_reject(
     else:
         deal.pending_message = ""
         deal.pending_message_approved = False
-        deal.save(update_fields=["pending_message", "pending_message_approved"])
+        deal.pending_message_created_at = None
+        deal.save(update_fields=["pending_message", "pending_message_approved", "pending_message_created_at"])
         console.print(f"[yellow]Deal {deal_id} ({deal.lead.public_identifier}): draft discarded[/yellow]")
 
 
