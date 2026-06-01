@@ -124,7 +124,7 @@ class Lead(models.Model):
 
         Labels are derived from Deal state and outcome:
         - label=1: Deals at any non-FAILED state (QUALIFIED and beyond)
-        - label=0: FAILED Deals with outcome "wrong_fit" (LLM rejection)
+        - label=0: Deals with outcome "wrong_fit" in any state
         - Skipped: FAILED Deals with other outcomes (operational failures)
         """
         from crm.models import Outcome
@@ -137,10 +137,9 @@ class Lead(models.Model):
 
         label_by_lead: dict[int, int] = {}
         for lid, state, outcome in deals:
-            if state == ProfileState.FAILED:
-                if outcome == Outcome.WRONG_FIT:
-                    label_by_lead[lid] = 0
-            else:
+            if outcome == Outcome.WRONG_FIT:
+                label_by_lead[lid] = 0
+            elif state != ProfileState.FAILED:
                 label_by_lead[lid] = 1
 
         if not label_by_lead:
