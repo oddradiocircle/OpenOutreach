@@ -84,6 +84,8 @@ _PIPELINE_CONDITION_FIELDS = (
     "follow_up_daily_limit",
     "check_pending_daily_cap",
     "max_followups_without_reply",
+    "min_qualification_observations_before_connect",
+    "preconnect_qualification_batch_size",
 )
 
 
@@ -118,6 +120,12 @@ class CampaignAdmin(admin.ModelAdmin):
             "follow_up_daily_limit": f"Global default: {site.follow_up_daily_limit}/day",
             "check_pending_daily_cap": f"Global default: {site.check_pending_daily_cap}/day",
             "max_followups_without_reply": f"Global default: {site.max_followups_without_reply}",
+            "min_qualification_observations_before_connect": (
+                f"Global default: {site.min_qualification_observations_before_connect} observations"
+            ),
+            "preconnect_qualification_batch_size": (
+                f"Global default: {site.preconnect_qualification_batch_size} lead(s)"
+            ),
         }
         for field, hint in hints.items():
             if field in form.base_fields:

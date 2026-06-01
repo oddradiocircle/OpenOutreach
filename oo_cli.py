@@ -1015,6 +1015,8 @@ _CONFIG_FIELDS: dict[str, tuple[str, str]] = {
     "follow_up_daily_limit":       ("int",   "Max follow-up messages per day"),
     "check_pending_daily_cap":     ("int",   "Max check_pending tasks per day"),
     "max_followups_without_reply": ("int",   "Follow-ups without reply before auto-FAILED"),
+    "min_qualification_observations_before_connect": ("int", "Min labels before cold connect candidates"),
+    "preconnect_qualification_batch_size": ("int", "Pending leads to qualify before cold connects"),
 }
 
 

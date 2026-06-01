@@ -15,6 +15,8 @@ def test_returns_siteconfig_values_when_no_campaign_override():
     site.gpr_qualification_threshold = 0.75
     site.check_pending_daily_cap = 50
     site.max_followups_without_reply = 7
+    site.min_qualification_observations_before_connect = 4
+    site.preconnect_qualification_batch_size = 2
     site.save()
 
     cfg = get_campaign_config()
@@ -23,6 +25,8 @@ def test_returns_siteconfig_values_when_no_campaign_override():
     assert cfg.gpr_qualification_threshold == 0.75
     assert cfg.check_pending_daily_cap == 50
     assert cfg.max_followups_without_reply == 7
+    assert cfg.min_qualification_observations_before_connect == 4
+    assert cfg.preconnect_qualification_batch_size == 2
 
 
 @pytest.mark.django_db
@@ -33,9 +37,14 @@ def test_campaign_override_takes_precedence_over_siteconfig():
     site.follow_up_cooldown_hours = 72
     site.save()
 
-    campaign = Campaign.objects.create(name="Override Campaign", follow_up_cooldown_hours=24)
+    campaign = Campaign.objects.create(
+        name="Override Campaign",
+        follow_up_cooldown_hours=24,
+        min_qualification_observations_before_connect=8,
+    )
     cfg = get_campaign_config(campaign)
     assert cfg.follow_up_cooldown_hours == 24
+    assert cfg.min_qualification_observations_before_connect == 8
 
 
 @pytest.mark.django_db
@@ -60,6 +69,11 @@ def test_fallback_constants_used_when_siteconfig_missing():
     assert cfg.follow_up_cooldown_hours == _DEFAULTS["follow_up_cooldown_hours"]
     assert cfg.reengagement_greeting_days == _DEFAULTS["reengagement_greeting_days"]
     assert cfg.check_pending_daily_cap == _DEFAULTS["check_pending_daily_cap"]
+    assert (
+        cfg.min_qualification_observations_before_connect
+        == _DEFAULTS["min_qualification_observations_before_connect"]
+    )
+    assert cfg.preconnect_qualification_batch_size == _DEFAULTS["preconnect_qualification_batch_size"]
 
 
 @pytest.mark.django_db

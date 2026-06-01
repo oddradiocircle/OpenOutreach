@@ -19,6 +19,8 @@ _DEFAULTS = {
     "follow_up_daily_limit": 25,
     "check_pending_daily_cap": 100,
     "max_followups_without_reply": 10,
+    "min_qualification_observations_before_connect": 0,
+    "preconnect_qualification_batch_size": 1,
 }
 
 
@@ -31,6 +33,8 @@ class PipelineConfig:
     follow_up_daily_limit: int
     check_pending_daily_cap: int
     max_followups_without_reply: int
+    min_qualification_observations_before_connect: int
+    preconnect_qualification_batch_size: int
 
 
 def get_campaign_config(campaign=None) -> PipelineConfig:
@@ -63,4 +67,6 @@ def get_campaign_config(campaign=None) -> PipelineConfig:
         follow_up_daily_limit=resolve("follow_up_daily_limit"),
         check_pending_daily_cap=resolve("check_pending_daily_cap"),
         max_followups_without_reply=resolve("max_followups_without_reply"),
+        min_qualification_observations_before_connect=resolve("min_qualification_observations_before_connect"),
+        preconnect_qualification_batch_size=resolve("preconnect_qualification_batch_size"),
     )
