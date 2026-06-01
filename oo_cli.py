@@ -29,6 +29,7 @@ task_app = typer.Typer(help="Inspect the task queue.", no_args_is_help=True)
 keyword_app = typer.Typer(help="Manage search keywords.", no_args_is_help=True)
 prompt_app = typer.Typer(help="Manage global and per-campaign LLM prompt templates.", no_args_is_help=True)
 config_app = typer.Typer(help="Manage pipeline configuration (global and per-campaign).", no_args_is_help=True)
+linkedin_app = typer.Typer(help="Import and inspect LinkedIn first-party data.", no_args_is_help=True)
 
 app.add_typer(crm_app, name="crm")
 app.add_typer(campaign_app, name="campaign")
@@ -36,6 +37,7 @@ app.add_typer(task_app, name="task")
 app.add_typer(keyword_app, name="keyword")
 app.add_typer(prompt_app, name="prompt")
 app.add_typer(config_app, name="config")
+app.add_typer(linkedin_app, name="linkedin")
 
 # ── colour maps ────────────────────────────────────────────────────────────────
 # Keys match ProfileState.value ("Qualified", "Ready to Connect", …)
@@ -151,6 +153,40 @@ def admin(port: int = typer.Argument(8001, help="Port for the Django Admin serve
     from django.core.management import call_command
     console.print(f"\n  Django Admin: [bold]http://localhost:{port}/admin/[/bold]\n")
     call_command("runserver", f"{port}")
+
+
+# ── linkedin imports ──────────────────────────────────────────────────────────
+
+@linkedin_app.command("import-export")
+def linkedin_import_export(
+    zip_path: Path = typer.Argument(..., help="Path to a LinkedIn member data export ZIP"),
+    campaign: str = typer.Option(..., "--campaign", help="Campaign name (partial match)"),
+):
+    """Import LinkedIn member export data into a campaign warm lead queue."""
+    from linkedin.importers.linkedin_export import import_connections, import_invitations, import_messages
+    from linkedin.models import LinkedInProfile
+
+    c = _get_campaign(campaign)
+    owner_public_ids = set(
+        LinkedInProfile.objects
+        .filter(user__campaigns=c, self_lead__public_identifier__isnull=False)
+        .values_list("self_lead__public_identifier", flat=True)
+    )
+
+    connection_summary = import_connections(str(zip_path), c)
+    invitation_summary = import_invitations(str(zip_path), c)
+    message_summary = import_messages(str(zip_path), c, owner_public_ids=owner_public_ids)
+
+    console.print(f"[green]Imported LinkedIn export into campaign '{c.name}'.[/green]")
+    console.print(
+        "[dim]processed files:[/dim] "
+        + ", ".join(
+            connection_summary.files_processed
+            + invitation_summary.files_processed
+            + message_summary.files_processed
+        )
+        or "none"
+    )
 
 
 # ── crm: leads ────────────────────────────────────────────────────────────────
