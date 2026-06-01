@@ -32,7 +32,7 @@
 
 ## Templating
 
-- **Jinja2** — used for LLM prompt templates (`.j2` files under `linkedin/templates/prompts/`).
+- **Jinja2** — used for LLM prompt templates. Prompt bodies are stored in the DB (`PromptTemplate` model, editable via Django Admin) with `.j2` files as hardcoded fallbacks. Bodies validated on save via `jinja2.Environment().parse()`. Per-campaign overrides stored in `CampaignPromptOverride`.
 
 ## Task Queue
 
