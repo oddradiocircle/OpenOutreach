@@ -54,7 +54,7 @@ class TestConnectButton:
 
     def test_connect_text_in_top_card(self, connect_page):
         top_card = find_top_card(connect_page)
-        assert "Connect" in top_card.inner_text()
+        assert any(text in top_card.inner_text() for text in ("Connect", "Conectar"))
 
     def test_more_button_found(self, connect_page):
         top_card = find_top_card(connect_page)
@@ -63,6 +63,68 @@ class TestConnectButton:
     def test_invite_to_connect_selector(self, connect_page):
         top_card = find_top_card(connect_page)
         assert top_card.locator(CONNECT_SELECTORS["invite_to_connect"]).count() > 0
+
+
+class TestSpanishConnectSelectors:
+    def test_direct_connect_button(self, page):
+        page.set_content("""
+            <section data-member-id="abc123">
+              <div class="pv-top-card">
+                <button aria-label="Invitar a Jaime a conectar">
+                  <span>Conectar</span>
+                </button>
+              </div>
+            </section>
+        """)
+        top_card = find_top_card(page)
+        assert top_card.locator(CONNECT_SELECTORS["invite_to_connect"]).count() > 0
+
+    def test_more_button(self, page):
+        page.set_content("""
+            <section data-member-id="abc123">
+              <div class="pv-top-card">
+                <button aria-label="Más acciones">
+                  <span>Más</span>
+                </button>
+              </div>
+            </section>
+        """)
+        top_card = find_top_card(page)
+        assert top_card.locator(CONNECT_SELECTORS["more_button"]).count() > 0
+
+    def test_connect_option_in_more_menu(self, page):
+        page.set_content("""
+            <section data-member-id="abc123">
+              <div class="pv-top-card">
+                <button aria-label="Más acciones">
+                  <span>Más</span>
+                </button>
+              </div>
+            </section>
+            <div role="menu">
+              <div role="menuitem" aria-label="Conectar con Jaime">Conectar</div>
+            </div>
+        """)
+        assert page.locator(CONNECT_SELECTORS["connect_option"]).count() > 0
+
+    def test_pending_button(self, page):
+        page.set_content("""
+            <section data-member-id="abc123">
+              <div class="pv-top-card">
+                <button aria-label="Pendiente">
+                  <span>Pendiente</span>
+                </button>
+              </div>
+            </section>
+        """)
+        top_card = find_top_card(page)
+        assert top_card.locator(STATUS_SELECTORS["pending_button"]).count() > 0
+
+    def test_send_now_button(self, page):
+        page.set_content("""
+            <button aria-label="Enviar sin nota">Enviar ahora</button>
+        """)
+        assert page.locator(CONNECT_SELECTORS["send_now"]).count() > 0
 
 
 # -- auto-discovered: pages/status/ -------------------------------------------

@@ -8,29 +8,48 @@ from linkedin.browser.nav import find_top_card, dump_page_html
 
 logger = logging.getLogger(__name__)
 
+CONNECT_TEXT = "^(Connect|Conectar)$"
+MORE_TEXT = "^(More|Mas|Más)$"
+SEND_NOW_TEXT = "(Send now|Send without|Send invitation|Enviar ahora|Enviar sin nota|Enviar invitación)"
+
 SELECTORS = {
     "weekly_limit": 'div[class*="ip-fuse-limit-alert__warning"]',
     "invite_to_connect": (
-        '[aria-label*="Invite"][aria-label*="to connect"]:visible, '
-        'a:has(span:text-is("Connect")):visible, '
-        'button:has(span:text-is("Connect")):visible'
+        '[aria-label*="Invite" i][aria-label*="connect" i]:visible, '
+        '[aria-label*="Invitar" i][aria-label*="conectar" i]:visible, '
+        'a:has(span:text-matches("' + CONNECT_TEXT + '", "i")):visible, '
+        'button:has(span:text-matches("' + CONNECT_TEXT + '", "i")):visible'
     ),
     "error_toast": 'div[data-test-artdeco-toast-item-type="error"]',
     "more_button": (
-        'button[aria-label="More"]:visible, '
+        'button[aria-label="More" i]:visible, '
+        'button[aria-label="Más" i]:visible, '
+        'button[aria-label="Mas" i]:visible, '
         'button[id*="overflow"]:visible, '
-        'button[aria-label*="More actions"]:visible, '
-        'button:has(span:text-is("More")):visible'
+        'button[aria-label*="More actions" i]:visible, '
+        'button[aria-label*="Más acciones" i]:visible, '
+        'button[aria-label*="Mas acciones" i]:visible, '
+        'button:has(span:text-matches("' + MORE_TEXT + '", "i")):visible'
     ),
     "connect_option": (
-        'div[role="button"][aria-label^="Invite"][aria-label*=" to connect"], '
-        'div[role="button"]:text-is("Connect"), '
-        '[role="menuitem"][aria-label*="Connect"], '
+        'div[role="button"][aria-label*="Invite" i][aria-label*="connect" i], '
+        'div[role="button"][aria-label*="Invitar" i][aria-label*="conectar" i], '
+        'div[role="button"]:text-matches("' + CONNECT_TEXT + '", "i"), '
+        '[role="menuitem"][aria-label*="Connect" i], '
+        '[role="menuitem"][aria-label*="Conectar" i], '
         '[role="menuitem"]:has-text("Connect"), '
-        'li:text-is("Connect"), '
-        'span[role="button"]:text-is("Connect")'
+        '[role="menuitem"]:has-text("Conectar"), '
+        'li:text-matches("' + CONNECT_TEXT + '", "i"), '
+        'span[role="button"]:text-matches("' + CONNECT_TEXT + '", "i")'
     ),
-    "send_now": 'button:has-text("Send now"), button[aria-label*="Send without"], button[aria-label*="Send invitation"]',
+    "send_now": (
+        'button:text-matches("' + SEND_NOW_TEXT + '", "i"), '
+        'button[aria-label*="Send without" i], '
+        'button[aria-label*="Send invitation" i], '
+        'button[aria-label*="Enviar ahora" i], '
+        'button[aria-label*="Enviar sin nota" i], '
+        'button[aria-label*="Enviar invitación" i]'
+    ),
 }
 
 

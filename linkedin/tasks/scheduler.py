@@ -9,13 +9,15 @@ This module is the only place that creates ``Task`` rows. The pipeline
 moves forward in three layers:
 
 1. **Per-type planner** — ``plan_connect_window``,
-   ``plan_follow_up_window``, ``plan_check_pending_window``. Each one,
-   when no PENDING task of its type exists for a campaign, computes the
-   right slot count ``n`` for the next 24h, inserts one row that fires
-   immediately, and Poisson-spaces the remaining ``n - 1`` rows across
-   the working portion of the window. The leading immediate slot kills
-   the cold-start ramp (without it the first action would sit ``T/n``
-   away on average — ~72 min for a 20/day campaign).
+   ``plan_follow_up_window``, ``plan_check_pending_window``. The connect
+   and follow-up planners compute the right slot count ``n`` for the
+   next 24h, insert one row that fires immediately, and Poisson-space the
+   remaining ``n - 1`` rows across the working portion of the window. The
+   leading immediate slot kills the cold-start ramp (without it the first
+   action would sit ``T/n`` away on average — ~72 min for a 20/day
+   campaign). ``check_pending`` slots are scheduled at their deal backoff
+   time instead, because a future PENDING deal is not eligible until
+   ``next_check_pending_at``.
 
 2. **State-transition hook** — ``on_deal_state_entered(deal)`` only
    updates ``deal.next_check_pending_at`` for PENDING transitions. It
@@ -218,7 +220,14 @@ def plan_follow_up_window(session, campaign) -> int:
 def plan_check_pending_window(session, campaign) -> int:
     """Plan the next 24h of check_pending slots for *campaign*. Slot count
     matches the PENDING deals whose backoff has expired (or expires
-    within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``."""
+    within the horizon), capped by ``CHECK_PENDING_DAILY_CAP``.
+
+    Unlike connect/follow-up slots, check_pending slots must not fire
+    before the deal's backoff expires: the handler only picks deals with
+    ``next_check_pending_at <= now``. Scheduling future backoffs at
+    ``now`` creates a reconcile loop where each eager slot is skipped and
+    immediately replanned.
+    """
     from crm.models import Deal
 
     if _has_pending(Task.TaskType.CHECK_PENDING, campaign.pk):
@@ -226,19 +235,26 @@ def plan_check_pending_window(session, campaign) -> int:
 
     now = timezone.now()
     cfg = get_campaign_config(campaign)
-    n_due = Deal.objects.filter(
-        campaign_id=campaign.pk,
-        state=ProfileState.PENDING,
-        next_check_pending_at__lte=now + timedelta(hours=24),
-    ).count()
-    n = min(n_due, cfg.check_pending_daily_cap)
+    due_times = list(
+        Deal.objects.filter(
+            campaign_id=campaign.pk,
+            state=ProfileState.PENDING,
+            next_check_pending_at__lte=now + timedelta(hours=24),
+        )
+        .order_by("next_check_pending_at")
+        .values_list("next_check_pending_at", flat=True)[:cfg.check_pending_daily_cap]
+    )
 
-    created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n)
+    times = [max(now, due_at) for due_at in due_times if due_at is not None]
+
+    created = _create_lazy_slots(Task.TaskType.CHECK_PENDING, campaign.pk, times)
     if created:
+        immediate = sum(1 for t in times if t == now)
         logger.info(
-            "[%s] planned %d check_pending slots over next 24h — 1 fires now, "
-            "%d Poisson-spaced (due=%d, cap=%d)",
-            campaign, created, max(0, created - 1), n_due, cfg.check_pending_daily_cap,
+            "[%s] planned %d check_pending slots over next 24h — %d due now, "
+            "%d scheduled at backoff time (eligible=%d, cap=%d)",
+            campaign, created, immediate, created - immediate, len(due_times),
+            cfg.check_pending_daily_cap,
         )
     return created
 

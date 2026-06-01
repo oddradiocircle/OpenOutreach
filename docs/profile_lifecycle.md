@@ -106,8 +106,9 @@ Rate-limited by `LinkedInProfile.can_execute()` / `record_action()`.
 
 **Unreachable profile detection**: when `send_connection_request` returns
 QUALIFIED (no Connect button), `connect_attempts` is incremented; after
-`MAX_CONNECT_ATTEMPTS` (3), the lead is disqualified (`lead.disqualified=True`)
-and the Deal is marked FAILED.
+`MAX_CONNECT_ATTEMPTS` (6), the Deal is marked FAILED with an unreachable
+reason. The lead is not globally disqualified; `lead.disqualified=True` is
+reserved for ICP mismatches.
 
 ## 6. Check Pending (PENDING → CONNECTED)
 

@@ -287,6 +287,31 @@ class TestPlanCheckPendingWindow:
         assert created == 2  # due_now + due_soon (due_later is past 24h horizon)
 
     @patch("linkedin.tasks.scheduler.ENABLE_ACTIVE_HOURS", False)
+    def test_future_due_deal_is_not_scheduled_immediately(self, fake_session):
+        deal = self._make_due_pending(fake_session, "due_soon", due_offset_hours=12)
+        Task.objects.all().delete()
+
+        created = scheduler.plan_check_pending_window(fake_session, fake_session.campaign)
+
+        assert created == 1
+        task = Task.objects.get(task_type=Task.TaskType.CHECK_PENDING)
+        assert task.scheduled_at == deal.next_check_pending_at
+        assert Task.objects.claim_next() is None
+
+    @patch("linkedin.tasks.scheduler.ENABLE_ACTIVE_HOURS", False)
+    def test_past_due_deal_is_scheduled_immediately(self, fake_session):
+        self._make_due_pending(fake_session, "due_now", due_offset_hours=-1)
+        Task.objects.all().delete()
+
+        before = timezone.now()
+        created = scheduler.plan_check_pending_window(fake_session, fake_session.campaign)
+
+        assert created == 1
+        task = Task.objects.get(task_type=Task.TaskType.CHECK_PENDING)
+        assert before <= task.scheduled_at <= timezone.now()
+        assert Task.objects.claim_next() == task
+
+    @patch("linkedin.tasks.scheduler.ENABLE_ACTIVE_HOURS", False)
     def test_noop_when_pending_exists(self, fake_session):
         self._make_due_pending(fake_session, "alice")
         Task.objects.create(

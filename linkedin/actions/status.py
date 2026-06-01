@@ -10,7 +10,11 @@ from linkedin.browser.nav import find_top_card, dump_page_html
 logger = logging.getLogger(__name__)
 
 SELECTORS = {
-    "pending_button": '[aria-label*="Pending"]',
+    "pending_button": (
+        '[aria-label*="Pending" i], '
+        '[aria-label*="Pendiente" i], '
+        'button:has(span:text-matches("^(Pending|Pendiente)$", "i"))'
+    ),
     "invite_to_connect": CONNECT_SELECTORS["invite_to_connect"],
     "more_button": CONNECT_SELECTORS["more_button"],
     "connect_option": CONNECT_SELECTORS["connect_option"],
