@@ -32,10 +32,21 @@ oo crm leads / deals / deal <id>           # read CRM
 oo crm disqualify/requalify <id>           # lead ops
 oo crm set-state/set-outcome <id> <val>   # deal ops
 oo crm pending [--campaign <name>]        # list drafts awaiting approval
-oo crm approve/reject <deal-id>           # approve or discard a draft
+oo crm approve <deal-id>                  # approve draft → queues immediate send
+oo crm reject <deal-id>                   # discard draft (daemon regenerates next cycle)
+oo crm reject <deal-id> --feedback "..."  # reject with instructions → immediate regeneration
 oo campaign list/show/create/update/delete
 oo keyword list/add/delete
 oo task list/cancel
+oo prompt list                            # list all global prompt templates
+oo prompt show/set/reset <key>            # view, edit, or reset a global prompt
+oo prompt override-list <campaign>        # list per-campaign prompt overrides
+oo prompt override-show/set/reset <campaign> <key>
+oo config show                            # show global pipeline conditions (SiteConfig)
+oo config set <field> <value>             # update a global pipeline condition
+oo config campaign-show <campaign>        # show overrides + effective values for a campaign
+oo config campaign-set <campaign> <field> <value>
+oo config campaign-reset <campaign> <field>
 
 # Testing
 make test / make docker-test
