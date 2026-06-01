@@ -119,6 +119,18 @@ def get_leads_for_qualification(session) -> list:
     return queued + [lead.to_profile_dict() for lead in fallback_leads]
 
 
+def get_campaign_lead_relationship_status(session, public_id: str) -> str | None:
+    """Return this lead's CampaignLead relationship status for session.campaign."""
+    from crm.models import CampaignLead
+
+    return (
+        CampaignLead.objects
+        .filter(campaign=session.campaign, lead__public_identifier=public_id)
+        .values_list("relationship_status", flat=True)
+        .first()
+    )
+
+
 def update_lead_slug(old_public_id: str, new_public_id: str):
     """Update a Lead after LinkedIn redirected its vanity URL."""
     from crm.models import Lead
