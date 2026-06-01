@@ -27,7 +27,7 @@ automation.
 
 ---
 
-## Phase 3: CLI Import Command
+## Phase 3: CLI Import Command [checkpoint: 37900bc]
 
 Expose the importer through the existing operator CLI and make the operation
 auditable from terminal output.
