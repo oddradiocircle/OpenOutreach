@@ -47,6 +47,8 @@ class Deal(models.Model):
     chat_summary = models.JSONField(null=True, blank=True, default=None)
     pending_message = models.TextField(blank=True, default="")
     pending_message_approved = models.BooleanField(default=False)
+    rejection_feedback = models.TextField(blank=True, null=True)
+    regeneration_count = models.IntegerField(default=0)
     creation_date = models.DateTimeField(default=timezone.now)
     update_date = models.DateTimeField(auto_now=True)
 
