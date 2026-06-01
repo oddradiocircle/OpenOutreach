@@ -27,11 +27,15 @@ crm_app = typer.Typer(help="Browse and edit CRM data.", no_args_is_help=True)
 campaign_app = typer.Typer(help="Manage campaigns.", no_args_is_help=True)
 task_app = typer.Typer(help="Inspect the task queue.", no_args_is_help=True)
 keyword_app = typer.Typer(help="Manage search keywords.", no_args_is_help=True)
+prompt_app = typer.Typer(help="Manage global and per-campaign LLM prompt templates.", no_args_is_help=True)
+config_app = typer.Typer(help="Manage pipeline configuration (global and per-campaign).", no_args_is_help=True)
 
 app.add_typer(crm_app, name="crm")
 app.add_typer(campaign_app, name="campaign")
 app.add_typer(task_app, name="task")
 app.add_typer(keyword_app, name="keyword")
+app.add_typer(prompt_app, name="prompt")
+app.add_typer(config_app, name="config")
 
 # ── colour maps ────────────────────────────────────────────────────────────────
 # Keys match ProfileState.value ("Qualified", "Ready to Connect", …)
@@ -697,6 +701,365 @@ def keyword_delete(
         typer.confirm(f"Delete keyword '{kw.keyword}' from '{kw.campaign.name}'?", abort=True)
     kw.delete()
     console.print(f"[red]Keyword '{kw.keyword}' deleted[/red]")
+
+
+# ── prompt ────────────────────────────────────────────────────────────────────
+
+def _load_prompt_body(body: Optional[str], file: Optional[Path], current: str = "") -> str:
+    """Return prompt body from --body, --file, or $EDITOR (pre-filled with current)."""
+    if body is not None:
+        return body
+    if file is not None:
+        return Path(file).read_text(encoding="utf-8")
+    import subprocess
+    import tempfile
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or "nano"
+    with tempfile.NamedTemporaryFile(suffix=".j2", mode="w", delete=False, encoding="utf-8") as f:
+        f.write(current)
+        tmp = Path(f.name)
+    subprocess.call([editor, str(tmp)])
+    text = tmp.read_text(encoding="utf-8")
+    tmp.unlink(missing_ok=True)
+    if not text.strip():
+        console.print("[yellow]Aborted — empty prompt[/yellow]")
+        raise typer.Exit(0)
+    return text
+
+
+def _validate_jinja2(body: str) -> None:
+    import jinja2
+    try:
+        jinja2.Environment().parse(body)
+    except jinja2.exceptions.TemplateSyntaxError as e:
+        console.print(f"[red]Jinja2 syntax error: {e}[/red]")
+        raise typer.Exit(1)
+
+
+@prompt_app.command("list")
+def prompt_list():
+    """List all global prompt templates."""
+    from linkedin.models import PromptTemplate
+
+    rows = PromptTemplate.objects.order_by("key")
+    if not rows.exists():
+        console.print("[dim]No prompt templates found — run migrations[/dim]")
+        return
+
+    t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    t.add_column("Key", style="cyan", no_wrap=True)
+    t.add_column("Name")
+    t.add_column("Updated", width=11)
+    t.add_column("Chars", justify="right", width=7)
+
+    for pt in rows:
+        t.add_row(pt.key, pt.name, pt.updated_at.strftime("%Y-%m-%d"), str(len(pt.body)))
+    console.print(t)
+
+
+@prompt_app.command("show")
+def prompt_show(key: str = typer.Argument(..., help="Prompt key")):
+    """Show the full body of a global prompt template."""
+    from linkedin.models import PromptTemplate
+
+    try:
+        pt = PromptTemplate.objects.get(key=key)
+    except PromptTemplate.DoesNotExist:
+        console.print(f"[red]Prompt '{key}' not found[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"\n[bold]{pt.key}[/bold]  [dim]{pt.name}[/dim]")
+    if pt.description:
+        console.print(f"[dim]{pt.description}[/dim]")
+    console.print(f"[dim]updated {pt.updated_at.strftime('%Y-%m-%d %H:%M')}  {len(pt.body)} chars[/dim]\n")
+    console.print(pt.body)
+    console.print()
+
+
+@prompt_app.command("set")
+def prompt_set(
+    key: str = typer.Argument(..., help="Prompt key"),
+    body: Optional[str] = typer.Option(None, "--body", "-b", help="Prompt text inline"),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read prompt from file"),
+):
+    """Edit a global prompt template. Opens $EDITOR if --body and --file are omitted."""
+    from linkedin.models import PromptTemplate
+
+    try:
+        pt = PromptTemplate.objects.get(key=key)
+    except PromptTemplate.DoesNotExist:
+        console.print(f"[red]Prompt '{key}' not found[/red]")
+        raise typer.Exit(1)
+
+    new_body = _load_prompt_body(body, file, current=pt.body)
+    _validate_jinja2(new_body)
+    pt.body = new_body
+    pt.save(update_fields=["body", "updated_at"])
+    console.print(f"[green]Prompt '{key}' updated ({len(new_body)} chars)[/green]")
+
+
+@prompt_app.command("reset")
+def prompt_reset(
+    key: str = typer.Argument(..., help="Prompt key"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Reset a global prompt template to its hardcoded default."""
+    from linkedin.models import PromptTemplate
+    from linkedin.prompts import _load_fallback
+
+    fallback = _load_fallback(key)
+    if not fallback:
+        console.print(f"[red]No hardcoded default for '{key}'[/red]")
+        raise typer.Exit(1)
+
+    if not yes:
+        typer.confirm(f"Reset '{key}' to hardcoded default? This overwrites any edits.", abort=True)
+
+    try:
+        pt = PromptTemplate.objects.get(key=key)
+    except PromptTemplate.DoesNotExist:
+        console.print(f"[red]Prompt '{key}' not found[/red]")
+        raise typer.Exit(1)
+
+    pt.body = fallback
+    pt.save(update_fields=["body", "updated_at"])
+    console.print(f"[yellow]Prompt '{key}' reset to hardcoded default[/yellow]")
+
+
+@prompt_app.command("override-list")
+def prompt_override_list(campaign: str = typer.Argument(..., help="Campaign name (partial match)")):
+    """List all prompt overrides for a campaign."""
+    from linkedin.models import CampaignPromptOverride
+
+    c = _get_campaign(campaign)
+    overrides = CampaignPromptOverride.objects.filter(campaign=c).order_by("prompt_key")
+
+    if not overrides.exists():
+        console.print(f"[dim]No prompt overrides for '{c.name}' — all prompts use global defaults[/dim]")
+        return
+
+    t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    t.add_column("Key", style="cyan", no_wrap=True)
+    t.add_column("Chars", justify="right", width=7)
+
+    for ov in overrides:
+        t.add_row(ov.prompt_key, str(len(ov.body)))
+    console.print(t)
+
+
+@prompt_app.command("override-show")
+def prompt_override_show(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    key: str = typer.Argument(..., help="Prompt key"),
+):
+    """Show a campaign prompt override."""
+    from linkedin.models import CampaignPromptOverride
+
+    c = _get_campaign(campaign)
+    try:
+        ov = CampaignPromptOverride.objects.get(campaign=c, prompt_key=key)
+    except CampaignPromptOverride.DoesNotExist:
+        console.print(f"[dim]No override for '{key}' in '{c.name}' — using global default[/dim]")
+        raise typer.Exit(0)
+
+    console.print(f"\n[bold]{c.name}[/bold] / [cyan]{key}[/cyan]\n")
+    console.print(ov.body)
+    console.print()
+
+
+@prompt_app.command("override-set")
+def prompt_override_set(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    key: str = typer.Argument(..., help="Prompt key"),
+    body: Optional[str] = typer.Option(None, "--body", "-b", help="Prompt text inline"),
+    file: Optional[Path] = typer.Option(None, "--file", "-f", help="Read prompt from file"),
+):
+    """Set a prompt override for a campaign. Opens $EDITOR if --body and --file are omitted."""
+    from linkedin.models import CampaignPromptOverride, PROMPT_KEYS
+
+    if key not in PROMPT_KEYS:
+        console.print(f"[red]Invalid key '{key}'. Valid: {', '.join(PROMPT_KEYS)}[/red]")
+        raise typer.Exit(1)
+
+    c = _get_campaign(campaign)
+    current = ""
+    try:
+        current = CampaignPromptOverride.objects.get(campaign=c, prompt_key=key).body
+    except CampaignPromptOverride.DoesNotExist:
+        pass
+
+    new_body = _load_prompt_body(body, file, current=current)
+    _validate_jinja2(new_body)
+    _, created = CampaignPromptOverride.objects.update_or_create(
+        campaign=c, prompt_key=key, defaults={"body": new_body}
+    )
+    action = "created" if created else "updated"
+    console.print(f"[green]Override for '{key}' in '{c.name}' {action} ({len(new_body)} chars)[/green]")
+
+
+@prompt_app.command("override-reset")
+def prompt_override_reset(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    key: str = typer.Argument(..., help="Prompt key"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Remove a campaign prompt override (reverts to global default)."""
+    from linkedin.models import CampaignPromptOverride
+
+    c = _get_campaign(campaign)
+    if not yes:
+        typer.confirm(f"Remove override for '{key}' in '{c.name}'? It will revert to the global default.", abort=True)
+
+    deleted, _ = CampaignPromptOverride.objects.filter(campaign=c, prompt_key=key).delete()
+    if deleted:
+        console.print(f"[yellow]Override for '{key}' in '{c.name}' removed — now using global default[/yellow]")
+    else:
+        console.print(f"[dim]No override found for '{key}' in '{c.name}'[/dim]")
+
+
+# ── config ────────────────────────────────────────────────────────────────────
+
+_CONFIG_FIELDS: dict[str, tuple[str, str]] = {
+    "follow_up_cooldown_hours":    ("int",   "Min hours between follow-up nudges"),
+    "reengagement_greeting_days":  ("int",   "Days of silence before re-greeting"),
+    "gpr_qualification_threshold": ("float", "Min GPR score to qualify a lead (0.0–1.0)"),
+    "connect_daily_limit":         ("int",   "Max connection requests per day"),
+    "follow_up_daily_limit":       ("int",   "Max follow-up messages per day"),
+    "check_pending_daily_cap":     ("int",   "Max check_pending tasks per day"),
+    "max_followups_without_reply": ("int",   "Follow-ups without reply before auto-FAILED"),
+}
+
+
+def _parse_config_value(field: str, raw: str):
+    type_, _ = _CONFIG_FIELDS[field]
+    if type_ == "int":
+        try:
+            val = int(raw)
+        except ValueError:
+            console.print(f"[red]'{field}' expects an integer[/red]")
+            raise typer.Exit(1)
+        if val < 0:
+            console.print(f"[red]'{field}' must be non-negative[/red]")
+            raise typer.Exit(1)
+        return val
+    else:
+        try:
+            val = float(raw)
+        except ValueError:
+            console.print(f"[red]'{field}' expects a float[/red]")
+            raise typer.Exit(1)
+        if field == "gpr_qualification_threshold" and not 0.0 <= val <= 1.0:
+            console.print(f"[red]'{field}' must be between 0.0 and 1.0[/red]")
+            raise typer.Exit(1)
+        return val
+
+
+@config_app.command("show")
+def config_show():
+    """Show global pipeline configuration (SiteConfig)."""
+    from linkedin.models import SiteConfig
+
+    cfg = SiteConfig.load()
+
+    t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    t.add_column("Field", style="cyan", no_wrap=True)
+    t.add_column("Value", justify="right", width=10)
+    t.add_column("Description", style="dim")
+
+    for field, (_, desc) in _CONFIG_FIELDS.items():
+        t.add_row(field, str(getattr(cfg, field)), desc)
+    console.print(t)
+
+
+@config_app.command("set")
+def config_set(
+    field: str = typer.Argument(..., help=f"Config field to update"),
+    value: str = typer.Argument(..., help="New value"),
+):
+    """Set a global pipeline config value."""
+    from linkedin.models import SiteConfig
+
+    if field not in _CONFIG_FIELDS:
+        console.print(f"[red]Unknown field '{field}'. Valid fields:[/red]")
+        for f, (_, desc) in _CONFIG_FIELDS.items():
+            console.print(f"  [cyan]{f}[/cyan]  [dim]{desc}[/dim]")
+        raise typer.Exit(1)
+
+    val = _parse_config_value(field, value)
+    cfg = SiteConfig.load()
+    setattr(cfg, field, val)
+    cfg.save(update_fields=[field])
+    console.print(f"[green]SiteConfig.{field} = {val}[/green]")
+
+
+@config_app.command("campaign-show")
+def config_campaign_show(campaign: str = typer.Argument(..., help="Campaign name (partial match)")):
+    """Show pipeline config for a campaign: overrides, global defaults, and effective values."""
+    from linkedin.models import SiteConfig
+    from linkedin.pipeline_config import get_campaign_config
+
+    c = _get_campaign(campaign)
+    cfg = SiteConfig.load()
+    effective = get_campaign_config(c)
+
+    t = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    t.add_column("Field", style="cyan", no_wrap=True)
+    t.add_column("Override", justify="right", width=10)
+    t.add_column("Global", justify="right", width=10, style="dim")
+    t.add_column("Effective", justify="right", width=10)
+
+    for field, (_, _desc) in _CONFIG_FIELDS.items():
+        override_val = getattr(c, field, None)
+        global_val = getattr(cfg, field)
+        effective_val = getattr(effective, field)
+        override_str = str(override_val) if override_val is not None else "[dim]—[/dim]"
+        effective_str = f"[bold]{effective_val}[/bold]" if override_val is not None else str(effective_val)
+        t.add_row(field, override_str, str(global_val), effective_str)
+
+    console.print(f"\n[bold]{c.name}[/bold] pipeline config\n")
+    console.print(t)
+    console.print()
+
+
+@config_app.command("campaign-set")
+def config_campaign_set(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    field: str = typer.Argument(..., help="Config field to override"),
+    value: str = typer.Argument(..., help="New value"),
+):
+    """Set a pipeline config override for a specific campaign."""
+    if field not in _CONFIG_FIELDS:
+        console.print(f"[red]Unknown field '{field}'. Valid fields:[/red]")
+        for f, (_, desc) in _CONFIG_FIELDS.items():
+            console.print(f"  [cyan]{f}[/cyan]  [dim]{desc}[/dim]")
+        raise typer.Exit(1)
+
+    c = _get_campaign(campaign)
+    val = _parse_config_value(field, value)
+    setattr(c, field, val)
+    c.save(update_fields=[field])
+    console.print(f"[green]Campaign '{c.name}': {field} = {val}[/green]")
+
+
+@config_app.command("campaign-reset")
+def config_campaign_reset(
+    campaign: str = typer.Argument(..., help="Campaign name (partial match)"),
+    field: str = typer.Argument(..., help="Config field to reset"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation"),
+):
+    """Clear a campaign config override (reverts to global SiteConfig value)."""
+    if field not in _CONFIG_FIELDS:
+        console.print(f"[red]Unknown field '{field}'. Valid fields:[/red]")
+        for f, (_, desc) in _CONFIG_FIELDS.items():
+            console.print(f"  [cyan]{f}[/cyan]  [dim]{desc}[/dim]")
+        raise typer.Exit(1)
+
+    c = _get_campaign(campaign)
+    if not yes:
+        typer.confirm(f"Reset '{field}' for '{c.name}' to global default?", abort=True)
+
+    setattr(c, field, None)
+    c.save(update_fields=[field])
+    console.print(f"[yellow]Campaign '{c.name}': {field} reset to global default[/yellow]")
 
 
 if __name__ == "__main__":
