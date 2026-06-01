@@ -89,7 +89,7 @@
   - [ ] Resolution: campaign field (if not null) → SiteConfig singleton →
         hardcoded fallback constant
 
-- [ ] Task 3.5: Migrate pipeline code to `get_campaign_config()`
+- [x] Task 3.5: Migrate pipeline code to `get_campaign_config()` (4964640)
   - [ ] Replace `CAMPAIGN_CONFIG` reads in `linkedin/tasks/follow_up.py`
   - [ ] Replace in `linkedin/tasks/scheduler.py`
   - [ ] Replace in qualification pipeline
