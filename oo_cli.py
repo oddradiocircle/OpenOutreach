@@ -122,6 +122,32 @@ def _validate_linkedin_export_zip(zip_path: Path) -> list[str]:
     return present
 
 
+def _print_linkedin_import_summary(campaign_name: str, summaries) -> None:
+    files = []
+    for summary in summaries:
+        files.extend(summary.files_processed)
+
+    def total(field: str) -> int:
+        return sum(getattr(summary, field, 0) for summary in summaries)
+
+    console.print(f"[green]Imported LinkedIn export into campaign '{campaign_name}'.[/green]")
+    console.print(f"[dim]processed files:[/dim] {', '.join(files) if files else 'none'}")
+
+    table = Table(box=rbox.SIMPLE, header_style="bold", pad_edge=False)
+    table.add_column("Metric")
+    table.add_column("Count", justify="right")
+    table.add_row("leads created", str(total("leads_created")))
+    table.add_row("leads reused", str(total("leads_reused")))
+    table.add_row("campaign leads created", str(total("campaign_leads_created")))
+    table.add_row("campaign leads updated", str(total("campaign_leads_updated")))
+    table.add_row("invitations imported", str(total("invitations_imported")))
+    table.add_row("invitations skipped", str(total("invitations_skipped")))
+    table.add_row("messages imported", str(total("messages_imported")))
+    table.add_row("messages skipped", str(total("messages_skipped")))
+    table.add_row("invalid profile URLs skipped", str(total("skipped_invalid_profile_urls")))
+    console.print(table)
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @app.command()
@@ -213,16 +239,7 @@ def linkedin_import_export(
     invitation_summary = import_invitations(str(zip_path), c)
     message_summary = import_messages(str(zip_path), c, owner_public_ids=owner_public_ids)
 
-    console.print(f"[green]Imported LinkedIn export into campaign '{c.name}'.[/green]")
-    console.print(
-        "[dim]processed files:[/dim] "
-        + ", ".join(
-            connection_summary.files_processed
-            + invitation_summary.files_processed
-            + message_summary.files_processed
-        )
-        or "none"
-    )
+    _print_linkedin_import_summary(c.name, [connection_summary, invitation_summary, message_summary])
 
 
 # ── crm: leads ────────────────────────────────────────────────────────────────
