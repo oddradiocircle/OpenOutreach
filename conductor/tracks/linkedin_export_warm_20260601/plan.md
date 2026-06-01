@@ -74,7 +74,7 @@ Document the warm import workflow and verify the whole path against the local
 LinkedIn export fixture.
 
 - [x] Task 6.1: Update `ARCHITECTURE.md` and relevant docs with `CampaignLead`, import command, and warm lead lifecycle 114fad2
-- [ ] Task 6.2: Add a small documented manual test plan for importing a LinkedIn export into the Red Warm campaign
+- [x] Task 6.2: Add a small documented manual test plan for importing a LinkedIn export into the Red Warm campaign 351c275
 - [ ] Task 6.3: Run targeted tests and full `pytest`
 - [ ] Task 6.4: Confirm no import path triggers browser automation, connection requests, or message sends
 - [ ] Task: Conductor - User Manual Verification 'Phase 6' (Protocol in workflow.md)
