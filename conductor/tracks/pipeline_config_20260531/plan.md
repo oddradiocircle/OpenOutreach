@@ -121,17 +121,9 @@
         `follow_up_agent.j2` prompt (e.g. under a `## Operator instructions`
         section)
 
-- [ ] Task 4.3: "Reject & Regenerate" admin action
-  - [ ] Create intermediate admin view (standard Django `response_action`
-        pattern) with a single `feedback` textarea
-  - [ ] Only available on deals in `PENDING` state
-  - [ ] On submit: save `rejection_feedback`, increment `regeneration_count`,
-        dispatch immediate follow-up task with feedback, return deal to
-        PENDING (no state change)
+- [x] Task 4.3: "Reject & Regenerate" admin action (d801c16)
 
-- [ ] Task 4.4: `DealAdmin` read-only display
-  - [ ] Show `rejection_feedback` and `regeneration_count` as read-only
-        fields in the deal detail/change view
+- [x] Task 4.4: `DealAdmin` read-only display (d801c16)
 
 - [ ] Task 4.5: CLI `--feedback` flag
   - [ ] Add `--feedback` option to `oo crm reject <deal-id>` command
