@@ -75,6 +75,15 @@ class Campaign(models.Model):
     require_message_approval = models.BooleanField(default=False)
     model_blob = models.BinaryField(null=True, blank=True)
 
+    # Per-campaign pipeline condition overrides (null = inherit from SiteConfig)
+    follow_up_cooldown_hours = models.PositiveIntegerField(null=True, blank=True)
+    reengagement_greeting_days = models.PositiveIntegerField(null=True, blank=True)
+    gpr_qualification_threshold = models.FloatField(null=True, blank=True)
+    connect_daily_limit = models.PositiveIntegerField(null=True, blank=True)
+    follow_up_daily_limit = models.PositiveIntegerField(null=True, blank=True)
+    check_pending_daily_cap = models.PositiveIntegerField(null=True, blank=True)
+    max_followups_without_reply = models.PositiveIntegerField(null=True, blank=True)
+
     def __str__(self):
         return self.name
 
