@@ -59,7 +59,7 @@ connected people from entering the cold connect path.
 Prevent cold connects before the model has enough observations and make manual
 `wrong_fit` feedback train the model correctly.
 
-- [ ] Task 5.1: Add site/campaign config fields for `min_qualification_observations_before_connect` and `preconnect_qualification_batch_size`
+- [x] Task 5.1: Add site/campaign config fields for `min_qualification_observations_before_connect` and `preconnect_qualification_batch_size` 474f8d1
 - [ ] Task 5.2: Update `PipelineConfig`, admin help text, CLI config parsing, and tests for the new fields
 - [ ] Task 5.3: Add bounded pre-connect qualification guard in `ready_source()` or adjacent pool helper
 - [ ] Task 5.4: Update `Lead.get_labeled_arrays()` so any `outcome=wrong_fit` labels negative regardless of state
