@@ -64,7 +64,7 @@ Prevent cold connects before the model has enough observations and make manual
 - [x] Task 5.3: Add bounded pre-connect qualification guard in `ready_source()` or adjacent pool helper 0c2baff
 - [x] Task 5.4: Update `Lead.get_labeled_arrays()` so any `outcome=wrong_fit` labels negative regardless of state b029ad7
 - [x] Task 5.5: Add tests for bounded guard behavior and `CONNECTED`/`COMPLETED` wrong-fit negative labels 67210e7
-- [ ] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 5' (Protocol in workflow.md)
 
 ---
 
