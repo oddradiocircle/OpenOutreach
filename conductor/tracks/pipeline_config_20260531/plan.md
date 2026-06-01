@@ -78,7 +78,7 @@
   - [ ] Same 7 fields, all nullable (null = inherit from SiteConfig)
   - [ ] Write and run migration
 
-- [ ] Task 3.3: `CampaignAdmin` fieldset "Pipeline Conditions (overrides)"
+- [x] Task 3.3: `CampaignAdmin` fieldset "Pipeline Conditions (overrides)" (6948d33)
   - [ ] Collapsible fieldset with all 7 override fields
   - [ ] Each field's `help_text` shows current `SiteConfig` global value
         dynamically (override `get_form()` in admin)
