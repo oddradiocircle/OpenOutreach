@@ -64,7 +64,7 @@
 
 ## Phase 3: Configurable Pipeline Conditions
 
-- [ ] Task 3.1: Add condition fields to `SiteConfig`
+- [x] Task 3.1: Add condition fields to `SiteConfig` (3ab839a)
   - [ ] `follow_up_cooldown_hours` (int)
   - [ ] `reengagement_greeting_days` (int)
   - [ ] `gpr_qualification_threshold` (float, 0.0–1.0)
