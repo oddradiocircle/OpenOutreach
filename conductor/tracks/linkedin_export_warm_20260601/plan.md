@@ -13,7 +13,7 @@ operators.
 
 ---
 
-## Phase 2: LinkedIn Export Importer
+## Phase 2: LinkedIn Export Importer [checkpoint: d231fc3]
 
 Add a ZIP importer that can safely ingest LinkedIn export data without browser
 automation.
