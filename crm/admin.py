@@ -2,6 +2,9 @@ from django.contrib import admin
 from django.contrib.contenttypes.admin import GenericTabularInline
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count
+from django.http import HttpResponseRedirect
+from django.template.response import TemplateResponse
+from django.urls import path
 from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 
@@ -124,9 +127,97 @@ class DealAdmin(admin.ModelAdmin):
         "connect_attempts", "backoff_hours", "next_check_pending_at",
         "profile_summary_display", "chat_summary_display",
         "conversation_thread", "creation_date", "update_date",
+        "rejection_feedback", "regeneration_count",
     )
     fields = readonly_fields + ("pending_message", "pending_message_approved")
     date_hierarchy = "creation_date"
+    actions = ["reject_and_regenerate"]
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom = [path("reject-regenerate/", self.admin_site.admin_view(self._reject_regen_view), name="crm_deal_reject_regenerate")]
+        return custom + urls
+
+    def _reject_regen_view(self, request):
+        """Intermediate form: collect feedback, then dispatch regeneration task."""
+        from django.contrib import messages
+        from django.utils import timezone as tz
+
+        from linkedin.models import Task
+        from linkedin.enums import ProfileState
+
+        deal_ids = [int(pk) for pk in request.POST.getlist("deal_ids") if pk.isdigit()]
+        deals = Deal.objects.filter(pk__in=deal_ids, state=ProfileState.PENDING).select_related("campaign", "lead")
+
+        if request.method == "POST" and request.POST.get("confirmed") == "1":
+            feedback = request.POST.get("feedback", "").strip()
+            if not feedback:
+                messages.error(request, "Feedback is required.")
+            else:
+                count = 0
+                for deal in deals:
+                    deal.rejection_feedback = feedback
+                    deal.regeneration_count = (deal.regeneration_count or 0) + 1
+                    deal.pending_message = ""
+                    deal.pending_message_approved = False
+                    deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved"])
+                    Task.objects.create(
+                        task_type=Task.TaskType.FOLLOW_UP,
+                        scheduled_at=tz.now(),
+                        payload={
+                            "campaign_id": deal.campaign_id,
+                            "deal_id": deal.pk,
+                            "regeneration_feedback": feedback,
+                        },
+                    )
+                    count += 1
+                messages.success(request, f"Regeneration dispatched for {count} deal(s).")
+                return HttpResponseRedirect("../")
+
+        context = {
+            **self.admin_site.each_context(request),
+            "title": "Reject & Regenerate",
+            "deals": deals,
+            "deal_ids": deal_ids,
+            "opts": self.model._meta,
+        }
+        from django.middleware.csrf import get_token
+        csrf_token = get_token(request)
+        deal_inputs = "".join(f'<input type="hidden" name="deal_ids" value="{pk}">' for pk in deal_ids)
+        deal_rows = "".join(
+            f'<p><strong>{escape(d.lead.public_identifier)}</strong> [{escape(str(d.campaign))}] '
+            f'Current draft: <em>{escape(d.pending_message[:100])}</em></p>'
+            for d in deals
+        )
+        html = (
+            "<!DOCTYPE html><html><head><title>Reject &amp; Regenerate</title>"
+            '<link rel="stylesheet" href="/static/admin/css/base.css">'
+            "</head><body>"
+            f"<h1>Reject &amp; Regenerate &mdash; {len(deals)} deal(s)</h1>"
+            f"{deal_rows}"
+            '<form method="post">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+            f"{deal_inputs}"
+            '<input type="hidden" name="confirmed" value="1">'
+            "<p><label for='feedback'><strong>Feedback for the LLM (required):</strong></label></p>"
+            "<textarea id='feedback' name='feedback' rows='6' cols='80' "
+            "placeholder='e.g. Too formal. Mention their recent post about AI.' required></textarea>"
+            "<p><input type='submit' value='Dispatch Regeneration'> "
+            '<a href="../">Cancel</a></p>'
+            "</form></body></html>"
+        )
+        from django.http import HttpResponse
+        return HttpResponse(html)
+
+    def reject_and_regenerate(self, request, queryset):
+        pending = queryset.filter(state=ProfileState.PENDING)
+        if not pending.exists():
+            self.message_user(request, "No PENDING deals selected.", level="warning")
+            return
+        deal_ids = list(pending.values_list("pk", flat=True))
+        post_data = "&".join(f"deal_ids={pk}" for pk in deal_ids)
+        return HttpResponseRedirect(f"reject-regenerate/?{post_data}")
+    reject_and_regenerate.short_description = "Reject & Regenerate selected draft(s)"
 
     def get_queryset(self, request):
         from chat.models import ChatMessage
