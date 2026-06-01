@@ -46,6 +46,8 @@ class SiteConfig(models.Model):
     follow_up_daily_limit = models.PositiveIntegerField(default=25)
     check_pending_daily_cap = models.PositiveIntegerField(default=100)
     max_followups_without_reply = models.PositiveIntegerField(default=10)
+    min_qualification_observations_before_connect = models.PositiveIntegerField(default=0)
+    preconnect_qualification_batch_size = models.PositiveIntegerField(default=1)
 
     class Meta:
         app_label = "linkedin"
@@ -83,6 +85,8 @@ class Campaign(models.Model):
     follow_up_daily_limit = models.PositiveIntegerField(null=True, blank=True)
     check_pending_daily_cap = models.PositiveIntegerField(null=True, blank=True)
     max_followups_without_reply = models.PositiveIntegerField(null=True, blank=True)
+    min_qualification_observations_before_connect = models.PositiveIntegerField(null=True, blank=True)
+    preconnect_qualification_batch_size = models.PositiveIntegerField(null=True, blank=True)
 
     def __str__(self):
         return self.name
