@@ -114,7 +114,7 @@
   - [ ] Add `regeneration_count` (IntegerField, default=0)
   - [ ] Write and run migration
 
-- [ ] Task 4.2: Feedback injection in follow-up generator
+- [x] Task 4.2: Feedback injection in follow-up generator (f241143)
   - [ ] Add optional `regeneration_feedback: str | None` param to the
         follow-up message generation function
   - [ ] When present, inject as an instruction block in the rendered
