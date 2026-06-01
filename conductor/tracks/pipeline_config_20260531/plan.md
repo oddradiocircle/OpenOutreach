@@ -96,7 +96,7 @@
   - [ ] Remove `CAMPAIGN_CONFIG` dict from `conf.py` (or keep as fallback
         constants only)
 
-- [ ] Task 3.6: Tests
+- [x] Task 3.6: Tests (197a5fc)
   - [ ] `SiteConfig` value is respected when no campaign override
   - [ ] Campaign override takes precedence over `SiteConfig`
   - [ ] Hardcoded constant is fallback when SiteConfig row missing
