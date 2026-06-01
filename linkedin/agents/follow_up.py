@@ -134,7 +134,7 @@ def _load_recent_messages(deal, limit: int = RECENT_MESSAGES_WINDOW) -> list:
     return list(reversed(list(qs)))
 
 
-def _render_system_prompt(session, deal, recent_messages: list) -> str:
+def _render_system_prompt(session, deal, recent_messages: list, regeneration_feedback: str | None = None) -> str:
     """Render the agent system prompt, resolved from DB or hardcoded fallback."""
     from django.utils import timezone
 
@@ -146,7 +146,7 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
     self_name = f"{self_prof.get('first_name', '')} {self_prof.get('last_name', '')}".strip() or session.django_user.username
 
     now = timezone.now()
-    return template.render(
+    rendered = template.render(
         self_name=self_name,
         contact_email=session.linkedin_profile.contact_email or "",
         product_docs=campaign.product_docs or "",
@@ -161,9 +161,16 @@ def _render_system_prompt(session, deal, recent_messages: list) -> str:
         unanswered_outgoing=_count_unanswered_outgoing(recent_messages),
         reengagement_greeting_days=get_campaign_config(campaign).reengagement_greeting_days,
     )
+    if regeneration_feedback:
+        rendered = (
+            f"{rendered}\n\n## Operator instructions\n"
+            f"The previous draft was rejected. Please rewrite it based on this feedback:\n"
+            f"{regeneration_feedback}"
+        )
+    return rendered
 
 
-def run_follow_up_agent(session, deal) -> FollowUpDecision:
+def run_follow_up_agent(session, deal, regeneration_feedback: str | None = None) -> FollowUpDecision:
     """Read conversation and return a structured follow-up decision.
 
     Sync chat first (which folds new messages into ``deal.chat_summary``),
@@ -178,7 +185,7 @@ def run_follow_up_agent(session, deal) -> FollowUpDecision:
     _log_chat_facts(public_id, deal)
 
     recent = _load_recent_messages(deal)
-    system_prompt = _render_system_prompt(session, deal, recent)
+    system_prompt = _render_system_prompt(session, deal, recent, regeneration_feedback=regeneration_feedback)
 
     agent = Agent(
         get_llm_model(),

@@ -232,49 +232,67 @@ def _send_approved(session, deal) -> bool:
 
 
 def handle_follow_up(task, session, qualifiers):
+    from crm.models import Deal
     from linkedin.actions.message import send_raw_message
     from linkedin.agents.follow_up import run_follow_up_agent
     from linkedin.db.deals import set_profile_state
     from linkedin.db.summaries import materialize_profile_summary_if_missing
 
     campaign = session.campaign
+    regeneration_feedback: str | None = task.payload.get("regeneration_feedback") or None
 
     if not session.linkedin_profile.can_execute(ActionLog.ActionType.FOLLOW_UP):
         logger.info("[%s] follow_up: daily limit reached — slot skipped", campaign)
         return
 
-    # Send any pre-approved draft before generating new ones.
-    # Only stop here if the send succeeded — a failed send falls through to
-    # Phase 2 so other leads in the campaign are not blocked.
-    approved = _next_approved_deal(campaign)
-    if approved and _send_approved(session, approved):
-        return
+    # Regeneration task: target a specific deal by ID.
+    if regeneration_feedback and task.payload.get("deal_id"):
+        deal = Deal.objects.filter(
+            pk=task.payload["deal_id"],
+            campaign=campaign,
+            state=ProfileState.CONNECTED,
+        ).select_related("lead", "campaign").first()
+        if deal is None:
+            logger.warning(
+                "[%s] follow_up regen: deal_id=%s not found or not CONNECTED — skipped",
+                campaign, task.payload["deal_id"],
+            )
+            return
+    else:
+        # Send any pre-approved draft before generating new ones.
+        # Only stop here if the send succeeded — a failed send falls through to
+        # Phase 2 so other leads in the campaign are not blocked.
+        approved = _next_approved_deal(campaign)
+        if approved and _send_approved(session, approved):
+            return
 
-    deal = _next_followup_deal(campaign, session=session)
-    if deal is None:
-        logger.info("[%s] follow_up: no eligible CONNECTED deal — slot skipped", campaign)
-        return
+        deal = _next_followup_deal(campaign, session=session)
+        if deal is None:
+            logger.info("[%s] follow_up: no eligible CONNECTED deal — slot skipped", campaign)
+            return
 
     public_id = deal.lead.public_identifier
     logger.info(
-        "[%s] %s %s",
+        "[%s] %s %s%s",
         campaign, colored("▶ follow_up", "green", attrs=["bold"]), public_id,
+        " (regen)" if regeneration_feedback else "",
     )
 
     # Hard auto-FAIL: if unanswered outgoing count >= max_followups_without_reply,
-    # mark unresponsive without calling the LLM.
-    cfg = get_campaign_config(campaign)
-    unanswered = _count_unanswered_outgoing_for_deal(deal)
-    if unanswered >= cfg.max_followups_without_reply:
-        logger.info(
-            "[%s] follow_up auto-FAILED %s — %d unanswered messages >= limit %d",
-            campaign, public_id, unanswered, cfg.max_followups_without_reply,
-        )
-        set_profile_state(session, public_id, ProfileState.COMPLETED.value, outcome="unresponsive")
-        return
+    # mark unresponsive without calling the LLM (skip for regeneration tasks).
+    if not regeneration_feedback:
+        cfg = get_campaign_config(campaign)
+        unanswered = _count_unanswered_outgoing_for_deal(deal)
+        if unanswered >= cfg.max_followups_without_reply:
+            logger.info(
+                "[%s] follow_up auto-FAILED %s — %d unanswered messages >= limit %d",
+                campaign, public_id, unanswered, cfg.max_followups_without_reply,
+            )
+            set_profile_state(session, public_id, ProfileState.COMPLETED.value, outcome="unresponsive")
+            return
 
     materialize_profile_summary_if_missing(deal, session)
-    decision = run_follow_up_agent(session, deal)
+    decision = run_follow_up_agent(session, deal, regeneration_feedback=regeneration_feedback)
 
     profile = _build_send_profile(deal)
 
