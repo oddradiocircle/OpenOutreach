@@ -9,5 +9,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [~] Track: LinkedIn Export Warm Lead Import & Campaign Lead Queue
+## [x] Track: LinkedIn Export Warm Lead Import & Campaign Lead Queue
 *Link: [./conductor/tracks/linkedin_export_warm_20260601/](./conductor/tracks/linkedin_export_warm_20260601/)*

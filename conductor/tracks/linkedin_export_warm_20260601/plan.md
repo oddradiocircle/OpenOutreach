@@ -68,7 +68,7 @@ Prevent cold connects before the model has enough observations and make manual
 
 ---
 
-## Phase 6: Documentation and End-to-End Verification
+## Phase 6: Documentation and End-to-End Verification [checkpoint: 2c31614]
 
 Document the warm import workflow and verify the whole path against the local
 LinkedIn export fixture.
