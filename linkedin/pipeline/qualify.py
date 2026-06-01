@@ -21,12 +21,17 @@ def fetch_qualification_candidates(session):
     if not leads:
         return []
 
-    lead_ids = {ld["lead_id"] for ld in leads}
+    lead_ids = [ld["lead_id"] for ld in leads]
 
-    candidates = list(
-        Lead.objects.filter(pk__in=lead_ids, embedding__isnull=False)
-        .order_by("creation_date")
+    candidates_by_id = Lead.objects.in_bulk(
+        lead_ids,
+        field_name="id",
     )
+    candidates = [
+        candidates_by_id[lead_id]
+        for lead_id in lead_ids
+        if lead_id in candidates_by_id and candidates_by_id[lead_id].embedding is not None
+    ]
     if candidates:
         return candidates
 

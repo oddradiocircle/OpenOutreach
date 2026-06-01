@@ -84,15 +84,39 @@ def get_leads_for_qualification(session) -> list:
     Returns profile dicts for leads that are not permanently disqualified
     and have no Deal in this campaign.
     """
-    from crm.models import Lead
+    from crm.models import CampaignLead, Lead
 
-    leads = Lead.objects.filter(
+    campaign_leads = (
+        CampaignLead.objects
+        .filter(campaign=session.campaign, lead__disqualified=False)
+        .exclude(lead__deal__campaign=session.campaign)
+        .select_related("lead")
+        .order_by("priority", "creation_date")
+    )
+    queued = []
+    queued_lead_ids = set()
+    for campaign_lead in campaign_leads:
+        profile = campaign_lead.lead.to_profile_dict()
+        profile["meta"].update({
+            "campaign_lead_id": campaign_lead.pk,
+            "campaign_lead_source": campaign_lead.source,
+            "relationship_status": campaign_lead.relationship_status,
+            "priority": campaign_lead.priority,
+        })
+        queued.append(profile)
+        queued_lead_ids.add(campaign_lead.lead_id)
+
+    fallback_leads = Lead.objects.filter(
         disqualified=False,
     ).exclude(
         deal__campaign=session.campaign,
+    ).exclude(
+        pk__in=queued_lead_ids,
+    ).order_by(
+        "creation_date",
     )
 
-    return [lead.to_profile_dict() for lead in leads]
+    return queued + [lead.to_profile_dict() for lead in fallback_leads]
 
 
 def update_lead_slug(old_public_id: str, new_public_id: str):
