@@ -101,7 +101,9 @@
   - [ ] Campaign override takes precedence over `SiteConfig`
   - [ ] Hardcoded constant is fallback when SiteConfig row missing
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md) (1955a6a)
+
+## Phase 3: Configurable Pipeline Conditions [checkpoint: 1955a6a]
 
 ---
 
