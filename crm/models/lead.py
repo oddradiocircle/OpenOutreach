@@ -16,6 +16,12 @@ class Lead(models.Model):
     linkedin_url = models.URLField(max_length=200, unique=True)
     public_identifier = models.CharField(max_length=200, unique=True)
     urn = models.CharField(max_length=200, null=True, blank=True, unique=True, db_index=True)
+    full_name = models.CharField(max_length=200, blank=True, default="")
+    first_name = models.CharField(max_length=100, blank=True, default="")
+    headline = models.CharField(max_length=500, blank=True, default="")
+    industry = models.CharField(max_length=200, blank=True, default="")
+    current_company = models.CharField(max_length=200, blank=True, default="")
+    current_title = models.CharField(max_length=200, blank=True, default="")
     location = models.CharField(max_length=300, blank=True, default="")
     country_code = models.CharField(max_length=10, blank=True, default="")
     languages = models.JSONField(default=list, blank=True)
@@ -64,15 +70,20 @@ class Lead(models.Model):
                 self.urn = urn
                 update_fields.append("urn")
 
-        location = profile.get("location_name") or ""
-        if location and self.location != location:
-            self.location = location
-            update_fields.append("location")
-
-        country_code = profile.get("country_code") or ""
-        if country_code and self.country_code != country_code:
-            self.country_code = country_code
-            update_fields.append("country_code")
+        _str_fields = [
+            ("full_name",      profile.get("full_name") or ""),
+            ("first_name",     profile.get("first_name") or ""),
+            ("headline",       profile.get("headline") or ""),
+            ("industry",       (profile.get("industry") or {}).get("name") or ""),
+            ("current_company", (profile.get("positions") or [{}])[0].get("company_name") or ""),
+            ("current_title",  (profile.get("positions") or [{}])[0].get("title") or ""),
+            ("location",       profile.get("location_name") or ""),
+            ("country_code",   profile.get("country_code") or ""),
+        ]
+        for field_name, value in _str_fields:
+            if value and getattr(self, field_name) != value:
+                setattr(self, field_name, value)
+                update_fields.append(field_name)
 
         languages = profile.get("supported_locales") or []
         if languages and self.languages != languages:

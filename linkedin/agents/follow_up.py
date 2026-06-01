@@ -163,6 +163,7 @@ def _render_system_prompt(session, deal, recent_messages: list, regeneration_fee
         days_since_last_outgoing=_days_since_last_outgoing(recent_messages, now),
         unanswered_outgoing=_count_unanswered_outgoing(recent_messages),
         reengagement_greeting_days=get_campaign_config(campaign).reengagement_greeting_days,
+        lead_first_name=lead.first_name or "",
         lead_location=lead.location or "",
         lead_country_code=lead.country_code or "",
         lead_languages=", ".join(lead.languages) if lead.languages else "",

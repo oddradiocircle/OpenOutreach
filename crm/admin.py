@@ -87,45 +87,89 @@ class ChatMessageInline(GenericTabularInline):
 
 @admin.register(Lead)
 class LeadAdmin(admin.ModelAdmin):
-    list_display = ("linkedin_link", "disqualified", "deal_count", "has_embedding", "creation_date")
-    list_filter = ("disqualified",)
-    search_fields = ("public_identifier", "linkedin_url")
-    readonly_fields = ("public_identifier", "linkedin_url", "urn", "embedding", "creation_date", "update_date")
+    list_display = (
+        "linkedin_link", "headline_col", "company_col",
+        "location_col", "languages_col", "industry_col",
+        "disqualified", "deal_count", "creation_date",
+    )
+    list_filter = ("disqualified", "country_code", "industry")
+    search_fields = (
+        "public_identifier", "linkedin_url",
+        "full_name", "headline", "current_company", "current_title",
+    )
+    readonly_fields = (
+        "public_identifier", "linkedin_url", "urn",
+        "full_name", "first_name", "headline", "industry",
+        "current_company", "current_title",
+        "location", "country_code", "languages",
+        "embedding", "creation_date", "update_date",
+    )
     inlines = [ChatMessageInline]
 
     def get_queryset(self, request):
         return super().get_queryset(request).annotate(_deal_count=Count("deal"))
 
     def linkedin_link(self, obj):
-        return format_html('<a href="{}" target="_blank">{}</a>', obj.linkedin_url, obj.public_identifier)
+        label = obj.full_name or obj.public_identifier
+        return format_html('<a href="{}" target="_blank">{}</a>', obj.linkedin_url, label)
     linkedin_link.short_description = "Lead"
-    linkedin_link.admin_order_field = "public_identifier"
+    linkedin_link.admin_order_field = "full_name"
+
+    def headline_col(self, obj):
+        return obj.headline or "—"
+    headline_col.short_description = "Título"
+    headline_col.admin_order_field = "headline"
+
+    def company_col(self, obj):
+        if not obj.current_company:
+            return "—"
+        label = obj.current_company
+        if obj.current_title:
+            label = f"{obj.current_title} @ {obj.current_company}"
+        return label
+    company_col.short_description = "Empresa / Cargo"
+    company_col.admin_order_field = "current_company"
+
+    def location_col(self, obj):
+        return obj.location or "—"
+    location_col.short_description = "Ubicación"
+    location_col.admin_order_field = "location"
+
+    def languages_col(self, obj):
+        if not obj.languages:
+            return "—"
+        return ", ".join(obj.languages)
+    languages_col.short_description = "Idiomas"
+
+    def industry_col(self, obj):
+        return obj.industry or "—"
+    industry_col.short_description = "Industria"
+    industry_col.admin_order_field = "industry"
 
     def deal_count(self, obj):
         return obj._deal_count
     deal_count.short_description = "Deals"
     deal_count.admin_order_field = "_deal_count"
 
-    def has_embedding(self, obj):
-        return obj.embedding is not None
-    has_embedding.boolean = True
-    has_embedding.short_description = "Embedded"
-
 
 @admin.register(CampaignLead)
 class CampaignLeadAdmin(admin.ModelAdmin):
     list_display = (
         "lead_link",
+        "lead_title_company",
+        "lead_location",
         "campaign",
         "source",
         "relationship_status",
-        "priority",
         "connected_on",
         "creation_date",
     )
-    list_filter = ("campaign", "source", "relationship_status", "priority")
+    list_filter = ("campaign", "source", "relationship_status", "lead__country_code")
     search_fields = (
         "lead__public_identifier",
+        "lead__full_name",
+        "lead__headline",
+        "lead__current_company",
         "lead__linkedin_url",
         "campaign__name",
     )
@@ -135,13 +179,25 @@ class CampaignLeadAdmin(admin.ModelAdmin):
     ordering = ("campaign", "priority", "creation_date")
 
     def lead_link(self, obj):
+        label = obj.lead.full_name or obj.lead.public_identifier
         return format_html(
             '<a href="{}" target="_blank">{}</a>',
             obj.lead.linkedin_url,
-            obj.lead.public_identifier,
+            label,
         )
     lead_link.short_description = "Lead"
-    lead_link.admin_order_field = "lead__public_identifier"
+    lead_link.admin_order_field = "lead__full_name"
+
+    def lead_title_company(self, obj):
+        parts = [p for p in (obj.lead.current_title, obj.lead.current_company) if p]
+        return " @ ".join(parts) if parts else "—"
+    lead_title_company.short_description = "Cargo / Empresa"
+    lead_title_company.admin_order_field = "lead__current_company"
+
+    def lead_location(self, obj):
+        return obj.lead.location or "—"
+    lead_location.short_description = "Ubicación"
+    lead_location.admin_order_field = "lead__location"
 
 
 @admin.register(Deal)
