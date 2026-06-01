@@ -29,6 +29,28 @@ Django Admin (`/admin/`) or created during interactive onboarding.
 | `is_freemium` | boolean | Whether this is a freemium campaign (uses KitQualifier instead of BayesianQualifier). |
 | `action_fraction` | float | Target fraction of total connections for freemium campaigns. |
 
+Pipeline condition defaults live in `SiteConfig` and can be overridden per campaign in Django Admin or via `oo config`.
+
+| Field | Default | Description |
+|:------|:--------|:------------|
+| `min_qualification_observations_before_connect` | `0` | Minimum campaign model labels before returning cold connect candidates. `0` disables the guard. |
+| `preconnect_qualification_batch_size` | `1` | Maximum pending leads to qualify in one pre-connect guard pass. |
+
+## LinkedIn Export Import
+
+Use the local CLI to import first-party LinkedIn member data exports:
+
+```bash
+oo linkedin import-export /path/to/Basic_LinkedInDataExport.zip --campaign "Campaign Name"
+```
+
+The importer reads `Connections.csv`, `Invitations.csv`, and `messages.csv`
+directly from the ZIP. It creates or reuses `Lead` rows, attaches warm leads to
+the target campaign through `CampaignLead`, imports message history as
+`ChatMessage`, and prints created/reused/skipped counts. The command is
+idempotent and does not send messages, connection requests, or use browser
+automation.
+
 ## Account Settings (Django Model)
 
 Account data is stored in the `LinkedInProfile` Django model (1:1 with `auth.User`), managed via

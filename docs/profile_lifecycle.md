@@ -49,6 +49,11 @@ per profile, capped at `enrich_max_per_page` (default 10) per discovered page.
 Leads with embeddings but no Deal are the qualification pool. Candidate
 selection depends on label balance:
 
+Campaign-specific warm leads are represented by `CampaignLead` rows. They are
+qualified before generic global leads, ordered by lower `priority` first.
+LinkedIn export imports create these rows from `Connections.csv` and
+`Invitations.csv`.
+
 | Condition | Strategy | Method |
 |-----------|----------|--------|
 | `n_negatives > n_positives` | **Exploit** — pick highest predicted probability | `qualifier.predict_probs()` |
@@ -65,6 +70,9 @@ The first candidate is selected in order and qualified via LLM.
 ### Result
 
 - Accepted: Lead promoted → Deal (state=QUALIFIED). LLM reason stored in `Deal.reason`.
+- Accepted and already connected: `CampaignLead.relationship_status=connected`
+  creates the Deal directly as CONNECTED, bypassing READY_TO_CONNECT and cold
+  connect slots.
 - Rejected: FAILED Deal with "Disqualified" closing reason (campaign-scoped, not `Lead.disqualified`). Reason in `Deal.reason`.
 
 ## 4. Ready to Connect (QUALIFIED → READY_TO_CONNECT)
