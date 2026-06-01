@@ -50,7 +50,7 @@
   - [ ] Override `body` textarea shows current global prompt text as
         `help_text` (loaded dynamically from `PromptTemplate`)
 
-- [ ] Task 2.3: Update `get_prompt()` — campaign override resolution
+- [x] Task 2.3: Update `get_prompt()` — campaign override resolution (a7b6b7e)
   - [ ] When `campaign` arg provided, query `CampaignPromptOverride` first
   - [ ] Fall through to global `PromptTemplate` if no override found
 
