@@ -21,7 +21,7 @@ automation.
 - [x] Task 2.1: Create `linkedin/importers/linkedin_export.py` with CSV helpers for ZIP reads and LinkedIn note/header handling ba981af
 - [x] Task 2.2: Implement `Connections.csv` import to create/reuse `Lead` and create/update `CampaignLead` c3d68fa
 - [x] Task 2.3: Implement `Invitations.csv` import with direction/status metadata and deduplication 9e014bb
-- [ ] Task 2.4: Implement `messages.csv` import to deduplicate `ChatMessage` rows using stable synthetic `linkedin_urn` values
+- [x] Task 2.4: Implement `messages.csv` import to deduplicate `ChatMessage` rows using stable synthetic `linkedin_urn` values cccb25b
 - [ ] Task 2.5: Add importer unit tests with small in-memory ZIP fixtures for parsing, idempotency, and skipped invalid URLs
 - [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
