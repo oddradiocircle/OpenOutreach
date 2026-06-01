@@ -74,7 +74,7 @@
   - [ ] `max_followups_without_reply` (int)
   - [ ] Migration with defaults matching current `CAMPAIGN_CONFIG` values
 
-- [ ] Task 3.2: Add nullable override fields to `Campaign`
+- [x] Task 3.2: Add nullable override fields to `Campaign` (37cf845)
   - [ ] Same 7 fields, all nullable (null = inherit from SiteConfig)
   - [ ] Write and run migration
 
