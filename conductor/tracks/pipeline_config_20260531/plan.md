@@ -83,7 +83,7 @@
   - [ ] Each field's `help_text` shows current `SiteConfig` global value
         dynamically (override `get_form()` in admin)
 
-- [ ] Task 3.4: `get_campaign_config(campaign)` helper
+- [x] Task 3.4: `get_campaign_config(campaign)` helper (5ef44ce)
   - [ ] Create `linkedin/pipeline_config.py`
   - [ ] `PipelineConfig` dataclass with all 7 fields
   - [ ] Resolution: campaign field (if not null) → SiteConfig singleton →
