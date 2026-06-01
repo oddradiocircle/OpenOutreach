@@ -268,8 +268,9 @@ class TestPlanCheckPendingWindow:
             assert t.payload == {"campaign_id": fake_session.campaign.pk}
 
     @patch("linkedin.tasks.scheduler.ENABLE_ACTIVE_HOURS", False)
-    @patch("linkedin.tasks.scheduler.CHECK_PENDING_DAILY_CAP", 4)
     def test_respects_daily_cap(self, fake_session):
+        fake_session.campaign.check_pending_daily_cap = 4
+        fake_session.campaign.save(update_fields=["check_pending_daily_cap"])
         for i in range(10):
             self._make_due_pending(fake_session, f"due{i}")
         Task.objects.all().delete()

@@ -10,12 +10,9 @@ from termcolor import colored
 
 from linkedin.enums import ProfileState
 from linkedin.models import ActionLog
+from linkedin.pipeline_config import get_campaign_config
 
 logger = logging.getLogger(__name__)
-
-# Required silence between nudges scales with unanswered count:
-# 1 unanswered → 3d, 2 → 6d, 3 → 9d. Skips the LLM call while open.
-MIN_DAYS_PER_UNANSWERED = 3
 
 # Unicode spaces that LinkedIn rejects (narrow no-break space, non-breaking space, etc.)
 _UNICODE_SPACES = "       　"
@@ -43,7 +40,7 @@ def _build_send_profile(deal) -> dict:
 
 
 def _too_soon_to_nudge(deal) -> bool:
-    """Wait ``unanswered_count * MIN_DAYS_PER_UNANSWERED`` days between nudges."""
+    """Wait ``unanswered_count * follow_up_cooldown_hours`` hours between nudges."""
     from chat.models import ChatMessage
     from django.contrib.contenttypes.models import ContentType
 
@@ -59,8 +56,30 @@ def _too_soon_to_nudge(deal) -> bool:
     if last_reply:
         nudges = nudges.filter(creation_date__gt=last_reply.creation_date)
 
-    required = timedelta(days=nudges.count() * MIN_DAYS_PER_UNANSWERED)
+    cooldown_hours = get_campaign_config(deal.campaign).follow_up_cooldown_hours
+    required = timedelta(hours=nudges.count() * cooldown_hours)
     return timezone.now() - last.creation_date < required
+
+
+def _count_unanswered_outgoing_for_deal(deal) -> int:
+    """Count trailing outgoing messages with no lead reply after them."""
+    from chat.models import ChatMessage
+    from django.contrib.contenttypes.models import ContentType
+
+    ct = ContentType.objects.get_for_model(type(deal.lead))
+    messages = list(
+        ChatMessage.objects
+        .filter(content_type=ct, object_id=deal.lead_id)
+        .order_by("-creation_date")
+        .values_list("is_outgoing", flat=True)[:50]
+    )
+    count = 0
+    for is_outgoing in messages:
+        if is_outgoing:
+            count += 1
+        else:
+            break
+    return count
 
 
 def _leads_followed_up_elsewhere(campaign):
@@ -241,6 +260,18 @@ def handle_follow_up(task, session, qualifiers):
         "[%s] %s %s",
         campaign, colored("▶ follow_up", "green", attrs=["bold"]), public_id,
     )
+
+    # Hard auto-FAIL: if unanswered outgoing count >= max_followups_without_reply,
+    # mark unresponsive without calling the LLM.
+    cfg = get_campaign_config(campaign)
+    unanswered = _count_unanswered_outgoing_for_deal(deal)
+    if unanswered >= cfg.max_followups_without_reply:
+        logger.info(
+            "[%s] follow_up auto-FAILED %s — %d unanswered messages >= limit %d",
+            campaign, public_id, unanswered, cfg.max_followups_without_reply,
+        )
+        set_profile_state(session, public_id, ProfileState.COMPLETED.value, outcome="unresponsive")
+        return
 
     materialize_profile_summary_if_missing(deal, session)
     decision = run_follow_up_agent(session, deal)

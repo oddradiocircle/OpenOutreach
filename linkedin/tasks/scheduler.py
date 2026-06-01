@@ -41,11 +41,11 @@ from linkedin.conf import (
     ACTIVE_START_HOUR,
     ACTIVE_TIMEZONE,
     CAMPAIGN_CONFIG,
-    CHECK_PENDING_DAILY_CAP,
     ENABLE_ACTIVE_HOURS,
 )
 from linkedin.enums import ProfileState
 from linkedin.models import Task
+from linkedin.pipeline_config import get_campaign_config
 
 logger = logging.getLogger(__name__)
 
@@ -180,14 +180,16 @@ def plan_connect_window(session, campaign) -> int:
         return 0
 
     profile = session.linkedin_profile
-    n = max(0, profile.connect_daily_limit - profile._daily_count("connect"))
+    cfg = get_campaign_config(campaign)
+    daily_limit = min(profile.connect_daily_limit, cfg.connect_daily_limit)
+    n = max(0, daily_limit - profile._daily_count("connect"))
 
     created = _plan_slots(Task.TaskType.CONNECT, campaign.pk, n)
     if created:
         logger.info(
             "[%s] planned %d connect slots over next 24h — 1 fires now, "
             "%d Poisson-spaced (daily=%d)",
-            campaign, created, max(0, created - 1), profile.connect_daily_limit,
+            campaign, created, max(0, created - 1), daily_limit,
         )
     return created
 
@@ -199,7 +201,9 @@ def plan_follow_up_window(session, campaign) -> int:
         return 0
 
     profile = session.linkedin_profile
-    daily_remaining = max(0, profile.follow_up_daily_limit - profile._daily_count("follow_up"))
+    cfg = get_campaign_config(campaign)
+    daily_limit = min(profile.follow_up_daily_limit, cfg.follow_up_daily_limit)
+    daily_remaining = max(0, daily_limit - profile._daily_count("follow_up"))
 
     created = _plan_slots(Task.TaskType.FOLLOW_UP, campaign.pk, daily_remaining)
     if created:
@@ -221,19 +225,20 @@ def plan_check_pending_window(session, campaign) -> int:
         return 0
 
     now = timezone.now()
+    cfg = get_campaign_config(campaign)
     n_due = Deal.objects.filter(
         campaign_id=campaign.pk,
         state=ProfileState.PENDING,
         next_check_pending_at__lte=now + timedelta(hours=24),
     ).count()
-    n = min(n_due, CHECK_PENDING_DAILY_CAP)
+    n = min(n_due, cfg.check_pending_daily_cap)
 
     created = _plan_slots(Task.TaskType.CHECK_PENDING, campaign.pk, n)
     if created:
         logger.info(
             "[%s] planned %d check_pending slots over next 24h — 1 fires now, "
             "%d Poisson-spaced (due=%d, cap=%d)",
-            campaign, created, max(0, created - 1), n_due, CHECK_PENDING_DAILY_CAP,
+            campaign, created, max(0, created - 1), n_due, cfg.check_pending_daily_cap,
         )
     return created
 
@@ -261,7 +266,7 @@ def on_deal_state_entered(deal) -> None:
     if state != ProfileState.PENDING:
         return
 
-    backoff = deal.backoff_hours or CAMPAIGN_CONFIG["check_pending_recheck_after_hours"]
+    backoff = deal.backoff_hours or CAMPAIGN_CONFIG.get("check_pending_recheck_after_hours", 24)
     deal.next_check_pending_at = timezone.now() + timedelta(hours=backoff)
     deal.save(update_fields=["next_check_pending_at"])
 

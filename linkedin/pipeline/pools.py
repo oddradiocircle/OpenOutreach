@@ -23,6 +23,7 @@ from typing import Generator
 import numpy as np
 
 from linkedin.conf import CAMPAIGN_CONFIG
+from linkedin.pipeline_config import get_campaign_config
 from linkedin.ml.qualifier import BayesianQualifier
 from linkedin.pipeline.qualify import fetch_qualification_candidates, run_qualification
 from linkedin.pipeline.ready_pool import find_ready_candidate, promote_to_ready
@@ -129,7 +130,8 @@ def qualify_source(session, qualifier: BayesianQualifier) -> Generator[str, None
 def ready_source(session, qualifier: BayesianQualifier, threshold: float | None = None) -> Generator[dict, None, None]:
     """Yield ready-to-connect candidates, pulling from qualify when needed."""
     if threshold is None:
-        threshold = CAMPAIGN_CONFIG["min_ready_to_connect_prob"]
+        campaign = getattr(session, "campaign", None)
+        threshold = get_campaign_config(campaign).gpr_qualification_threshold
     qualify = qualify_source(session, qualifier)
 
     while True:
