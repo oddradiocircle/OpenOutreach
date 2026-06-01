@@ -48,7 +48,7 @@ connected people from entering the cold connect path.
 - [x] Task 4.1: Update `get_leads_for_qualification(session)` to prioritize pending `CampaignLead` rows before generic global leads b02d378
 - [x] Task 4.2: Add helper to resolve a lead's campaign relationship status for the active campaign d92b4e9
 - [x] Task 4.3: Update positive qualification deal creation so `relationship_status=connected` creates `CONNECTED` deals directly 558dc66
-- [ ] Task 4.4: Verify already-connected campaign leads are excluded from `READY_TO_CONNECT` and connect-slot consumption
+- [x] Task 4.4: Verify already-connected campaign leads are excluded from `READY_TO_CONNECT` and connect-slot consumption a0f7a72
 - [ ] Task 4.5: Add tests for candidate ordering, connected warm lead state, and fallback to global leads
 - [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
 
