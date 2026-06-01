@@ -158,7 +158,11 @@ class DealAdmin(admin.ModelAdmin):
         from linkedin.enums import ProfileState
 
         deal_ids = [int(pk) for pk in request.POST.getlist("deal_ids") if pk.isdigit()]
-        deals = Deal.objects.filter(pk__in=deal_ids, state=ProfileState.PENDING).select_related("campaign", "lead")
+        deals = (
+            Deal.objects.filter(pk__in=deal_ids, pending_message_approved=False)
+            .exclude(pending_message="")
+            .select_related("campaign", "lead")
+        )
 
         if request.method == "POST" and request.POST.get("confirmed") == "1":
             feedback = request.POST.get("feedback", "").strip()
@@ -171,8 +175,7 @@ class DealAdmin(admin.ModelAdmin):
                     deal.regeneration_count = (deal.regeneration_count or 0) + 1
                     deal.pending_message = ""
                     deal.pending_message_approved = False
-                    deal.pending_message_created_at = None
-                    deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved", "pending_message_created_at"])
+                    deal.save(update_fields=["rejection_feedback", "regeneration_count", "pending_message", "pending_message_approved"])
                     Task.objects.create(
                         task_type=Task.TaskType.FOLLOW_UP,
                         scheduled_at=tz.now(),
@@ -222,9 +225,9 @@ class DealAdmin(admin.ModelAdmin):
         return HttpResponse(html)
 
     def reject_and_regenerate(self, request, queryset):
-        pending = queryset.filter(state=ProfileState.PENDING)
+        pending = queryset.filter(pending_message_approved=False).exclude(pending_message="")
         if not pending.exists():
-            self.message_user(request, "No PENDING deals selected.", level="warning")
+            self.message_user(request, "No deals with unapproved drafts selected.", level="warning")
             return
         deal_ids = list(pending.values_list("pk", flat=True))
         post_data = "&".join(f"deal_ids={pk}" for pk in deal_ids)
