@@ -54,7 +54,7 @@ connected people from entering the cold connect path.
 
 ---
 
-## Phase 5: Pre-Connect Guard and Feedback Labels
+## Phase 5: Pre-Connect Guard and Feedback Labels [checkpoint: b01a3c2]
 
 Prevent cold connects before the model has enough observations and make manual
 `wrong_fit` feedback train the model correctly.
