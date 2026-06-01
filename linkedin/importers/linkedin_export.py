@@ -29,6 +29,8 @@ class ImportSummary:
     leads_reused: int = 0
     campaign_leads_created: int = 0
     campaign_leads_updated: int = 0
+    invitations_imported: int = 0
+    invitations_skipped: int = 0
     skipped_invalid_profile_urls: int = 0
 
 
@@ -72,6 +74,53 @@ def import_connections(zip_path: str, campaign) -> ImportSummary:
             summary.campaign_leads_created += 1
         else:
             summary.campaign_leads_updated += 1
+
+    return summary
+
+
+def import_invitations(zip_path: str, campaign) -> ImportSummary:
+    """Import LinkedIn Invitations.csv rows into a campaign lead queue."""
+    summary = ImportSummary(files_processed=[])
+    export_csv = read_export_csv(zip_path, "Invitations.csv")
+    if export_csv is None:
+        return summary
+
+    summary.files_processed.append(export_csv.name)
+    for row in export_csv.rows:
+        public_id = extract_profile_public_id(
+            _row_value(row, "Profile URL", "URL", "Member Profile URL"),
+            _row_value(row, "From Profile URL", "Inviter Profile URL", "Sender Profile URL"),
+            _row_value(row, "To Profile URL", "Invitee Profile URL", "Recipient Profile URL"),
+        )
+        if not public_id:
+            summary.skipped_invalid_profile_urls += 1
+            summary.invitations_skipped += 1
+            continue
+
+        lead, lead_created = Lead.objects.get_or_create(
+            public_identifier=public_id,
+            defaults={"linkedin_url": public_id_to_url(public_id)},
+        )
+        if lead_created:
+            summary.leads_created += 1
+        else:
+            summary.leads_reused += 1
+
+        _, campaign_lead_created = CampaignLead.objects.update_or_create(
+            campaign=campaign,
+            lead=lead,
+            defaults={
+                "source": CampaignLead.Source.LINKEDIN_INVITATION,
+                "relationship_status": CampaignLead.RelationshipStatus.INVITED,
+                "priority": 20,
+                "metadata": _invitation_metadata(row),
+            },
+        )
+        if campaign_lead_created:
+            summary.campaign_leads_created += 1
+        else:
+            summary.campaign_leads_updated += 1
+        summary.invitations_imported += 1
 
     return summary
 
@@ -183,6 +232,21 @@ def _connection_metadata(row: dict[str, str]) -> dict[str, str]:
     full_name = " ".join(part for part in [fields["first_name"], fields["last_name"]] if part)
     if full_name:
         fields["name"] = full_name
+    return {key: value for key, value in fields.items() if value}
+
+
+def _invitation_metadata(row: dict[str, str]) -> dict[str, str]:
+    fields = {
+        "direction": _row_value(row, "Direction", "Invitation Direction", "Type"),
+        "status": _row_value(row, "Status"),
+        "sent_at": _row_value(row, "Sent At", "Sent Date", "Date", "Created At"),
+        "message": _row_value(row, "Message", "Invite Message"),
+        "from": _row_value(row, "From", "Inviter", "Sender"),
+        "to": _row_value(row, "To", "Invitee", "Recipient"),
+        "profile_url": _row_value(row, "Profile URL", "URL", "Member Profile URL"),
+        "from_profile_url": _row_value(row, "From Profile URL", "Inviter Profile URL", "Sender Profile URL"),
+        "to_profile_url": _row_value(row, "To Profile URL", "Invitee Profile URL", "Recipient Profile URL"),
+    }
     return {key: value for key, value in fields.items() if value}
 
 
