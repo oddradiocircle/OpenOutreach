@@ -33,7 +33,7 @@ Expose the importer through the existing operator CLI and make the operation
 auditable from terminal output.
 
 - [x] Task 3.1: Add `oo linkedin import-export <zip-path> --campaign "<campaign>"` command 1c16a62
-- [ ] Task 3.2: Validate campaign lookup, file existence, ZIP readability, and missing expected CSV files
+- [x] Task 3.2: Validate campaign lookup, file existence, ZIP readability, and missing expected CSV files 979f64f
 - [ ] Task 3.3: Print a concise import summary with created/reused/skipped counts
 - [ ] Task 3.4: Add CLI tests for success, missing campaign, missing file, and idempotent rerun behavior
 - [ ] Task: Conductor - User Manual Verification 'Phase 3' (Protocol in workflow.md)
