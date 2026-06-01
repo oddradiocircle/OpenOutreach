@@ -54,9 +54,7 @@
   - [ ] When `campaign` arg provided, query `CampaignPromptOverride` first
   - [ ] Fall through to global `PromptTemplate` if no override found
 
-- [ ] Task 2.4: Tests
-  - [ ] Campaign override takes precedence over global PromptTemplate
-  - [ ] Other campaigns are unaffected by override
+- [x] Task 2.4: Tests (ee37223)
 
 - [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
