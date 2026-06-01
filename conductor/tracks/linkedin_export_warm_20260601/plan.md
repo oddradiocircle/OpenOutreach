@@ -23,7 +23,7 @@ automation.
 - [x] Task 2.3: Implement `Invitations.csv` import with direction/status metadata and deduplication 9e014bb
 - [x] Task 2.4: Implement `messages.csv` import to deduplicate `ChatMessage` rows using stable synthetic `linkedin_urn` values cccb25b
 - [x] Task 2.5: Add importer unit tests with small in-memory ZIP fixtures for parsing, idempotency, and skipped invalid URLs f33cf9f
-- [ ] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 2' (Protocol in workflow.md)
 
 ---
 
