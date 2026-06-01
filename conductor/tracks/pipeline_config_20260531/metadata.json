@@ -1,0 +1,8 @@
+{
+  "track_id": "pipeline_config_20260531",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-05-31T00:00:00Z",
+  "updated_at": "2026-05-31T00:00:00Z",
+  "description": "Configurable pipeline prompts, conditions & message rejection with regeneration"
+}
