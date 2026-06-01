@@ -1,0 +1,8 @@
+{
+  "track_id": "linkedin_export_warm_20260601",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-06-01T03:42:17Z",
+  "updated_at": "2026-06-01T03:42:17Z",
+  "description": "Import LinkedIn member export data into campaign-specific warm lead queues, prioritize those leads in qualification, route existing connections directly to follow-up, and fix wrong_fit feedback labeling."
+}
