@@ -39,7 +39,7 @@
 
 ## Phase 2: Per-Campaign Prompt Overrides
 
-- [ ] Task 2.1: Define `CampaignPromptOverride` model
+- [x] Task 2.1: Define `CampaignPromptOverride` model (f904041)
   - [ ] Fields: `campaign` (FK → Campaign), `prompt_key` (CharField,
         choices from prompt keys), `body` (TextField)
   - [ ] Unique constraint on `(campaign, prompt_key)`
