@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import zipfile
 from collections.abc import Iterable, Iterator
@@ -31,6 +32,8 @@ class ImportSummary:
     campaign_leads_updated: int = 0
     invitations_imported: int = 0
     invitations_skipped: int = 0
+    messages_imported: int = 0
+    messages_skipped: int = 0
     skipped_invalid_profile_urls: int = 0
 
 
@@ -121,6 +124,74 @@ def import_invitations(zip_path: str, campaign) -> ImportSummary:
         else:
             summary.campaign_leads_updated += 1
         summary.invitations_imported += 1
+
+    return summary
+
+
+def import_messages(
+    zip_path: str,
+    campaign,
+    owner_public_ids: set[str] | None = None,
+    owner=None,
+) -> ImportSummary:
+    """Import LinkedIn messages.csv rows as Lead-linked ChatMessage rows."""
+    from chat.models import ChatMessage
+    from django.contrib.contenttypes.models import ContentType
+
+    summary = ImportSummary(files_processed=[])
+    export_csv = read_export_csv(zip_path, "messages.csv")
+    if export_csv is None:
+        return summary
+
+    owner_public_ids = owner_public_ids or set()
+    lead_ct = ContentType.objects.get_for_model(Lead)
+    summary.files_processed.append(export_csv.name)
+
+    for row in export_csv.rows:
+        content = _row_value(row, "Content", "Message", "Text", "Body")
+        if not content:
+            summary.messages_skipped += 1
+            continue
+
+        sender_id = extract_profile_public_id(
+            _row_value(row, "Sender Profile URL", "From Profile URL", "From"),
+        )
+        recipient_id = extract_profile_public_id(
+            _row_value(row, "Recipient Profile URL", "To Profile URL", "To", "Recipients"),
+        )
+        counterparty_id = _counterparty_public_id(sender_id, recipient_id, owner_public_ids)
+        if not counterparty_id:
+            summary.skipped_invalid_profile_urls += 1
+            summary.messages_skipped += 1
+            continue
+
+        lead, lead_created = Lead.objects.get_or_create(
+            public_identifier=counterparty_id,
+            defaults={"linkedin_url": public_id_to_url(counterparty_id)},
+        )
+        if lead_created:
+            summary.leads_created += 1
+        else:
+            summary.leads_reused += 1
+
+        is_outgoing = bool(sender_id and sender_id in owner_public_ids)
+        creation_date = _parse_datetime(_row_value(row, "Date", "Created At", "Sent At", "Timestamp"))
+        linkedin_urn = _synthetic_message_urn(row, content, is_outgoing)
+        _, created = ChatMessage.objects.update_or_create(
+            linkedin_urn=linkedin_urn,
+            defaults={
+                "content_type": lead_ct,
+                "object_id": lead.pk,
+                "content": content,
+                "is_outgoing": is_outgoing,
+                "owner": owner,
+                **({"creation_date": creation_date} if creation_date else {}),
+            },
+        )
+        if created:
+            summary.messages_imported += 1
+        else:
+            summary.messages_skipped += 1
 
     return summary
 
@@ -259,3 +330,49 @@ def _parse_date(value: str) -> date | None:
         except ValueError:
             continue
     return None
+
+
+def _parse_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%dT%H:%M:%S",
+        "%m/%d/%Y %H:%M:%S",
+        "%m/%d/%Y %H:%M",
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d %b %Y, %H:%M",
+        "%d %B %Y, %H:%M",
+    ):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    parsed_date = _parse_date(value)
+    if parsed_date:
+        return datetime.combine(parsed_date, datetime.min.time())
+    return None
+
+
+def _counterparty_public_id(
+    sender_id: str | None,
+    recipient_id: str | None,
+    owner_public_ids: set[str],
+) -> str | None:
+    if sender_id and sender_id not in owner_public_ids:
+        return sender_id
+    if recipient_id and recipient_id not in owner_public_ids:
+        return recipient_id
+    return sender_id or recipient_id
+
+
+def _synthetic_message_urn(row: dict[str, str], content: str, is_outgoing: bool) -> str:
+    conversation_id = _row_value(row, "Conversation ID", "Conversation Id", "Conversation")
+    timestamp = _row_value(row, "Date", "Created At", "Sent At", "Timestamp")
+    direction = "out" if is_outgoing else "in"
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    raw_key = "|".join([conversation_id, timestamp, direction, digest])
+    stable = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+    return f"urn:openoutreach:linkedin-export-message:{stable}"
