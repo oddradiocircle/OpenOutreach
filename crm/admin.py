@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.utils.html import escape, format_html, mark_safe
 
 from chat.models import ChatMessage
+from crm.models.campaign_lead import CampaignLead
 from crm.models.deal import Deal, Outcome
 from crm.models.lead import Lead
 from linkedin.enums import ProfileState
@@ -108,6 +109,38 @@ class LeadAdmin(admin.ModelAdmin):
         return obj.embedding is not None
     has_embedding.boolean = True
     has_embedding.short_description = "Embedded"
+
+
+@admin.register(CampaignLead)
+class CampaignLeadAdmin(admin.ModelAdmin):
+    list_display = (
+        "lead_link",
+        "campaign",
+        "source",
+        "relationship_status",
+        "priority",
+        "connected_on",
+        "creation_date",
+    )
+    list_filter = ("campaign", "source", "relationship_status", "priority")
+    search_fields = (
+        "lead__public_identifier",
+        "lead__linkedin_url",
+        "campaign__name",
+    )
+    list_select_related = ("lead", "campaign")
+    readonly_fields = ("creation_date", "update_date")
+    date_hierarchy = "creation_date"
+    ordering = ("campaign", "priority", "creation_date")
+
+    def lead_link(self, obj):
+        return format_html(
+            '<a href="{}" target="_blank">{}</a>',
+            obj.lead.linkedin_url,
+            obj.lead.public_identifier,
+        )
+    lead_link.short_description = "Lead"
+    lead_link.admin_order_field = "lead__public_identifier"
 
 
 @admin.register(Deal)
