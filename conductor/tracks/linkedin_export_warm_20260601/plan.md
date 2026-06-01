@@ -1,6 +1,6 @@
 # Plan: LinkedIn Export Warm Lead Import & Campaign Lead Queue
 
-## Phase 1: Campaign Lead Foundation
+## Phase 1: Campaign Lead Foundation [checkpoint: c2fd8c4]
 
 Create the durable campaign-specific lead queue and make it visible to
 operators.
