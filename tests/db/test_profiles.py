@@ -8,6 +8,7 @@ from linkedin.db.deals import (
 )
 from linkedin.db.leads import (
     create_enriched_lead,
+    discover_and_enrich,
     promote_lead_to_deal,
     get_leads_for_qualification,
     lead_exists,
@@ -382,3 +383,65 @@ class TestMultiCampaignQualification:
         other_session = self._make_other_session(fake_session)
         leads = get_leads_for_qualification(other_session)
         assert len(leads) == 1
+
+
+# ── discover_and_enrich ──
+
+@pytest.mark.django_db
+class TestDiscoverAndEnrich:
+    PROFILE = {
+        "first_name": "Bob",
+        "last_name": "Builder",
+        "headline": "Contractor",
+        "positions": [],
+        "urn": "urn:li:fsd_profile:BOB999",
+        "public_identifier": "bob-builder",
+    }
+
+    def _run(self, session, urls, profile=None):
+        from unittest.mock import MagicMock, patch
+        profile = profile or self.PROFILE
+        mock_api = MagicMock()
+        mock_api.get_profile.return_value = (profile, {})
+        with patch("linkedin.api.client.PlaywrightLinkedinAPI", return_value=mock_api):
+            discover_and_enrich(session, urls)
+
+    def test_creates_campaign_lead_with_linkedin_search_source(self, fake_session):
+        from crm.models import CampaignLead
+        self._run(fake_session, ["https://www.linkedin.com/in/bob-builder/"])
+        cl = CampaignLead.objects.get(campaign=fake_session.campaign, lead__public_identifier="bob-builder")
+        assert cl.source == CampaignLead.Source.LINKEDIN_SEARCH
+        assert cl.relationship_status == CampaignLead.RelationshipStatus.UNKNOWN
+        assert cl.priority == 50
+
+    def test_idempotent_on_rerun(self, fake_session):
+        from crm.models import CampaignLead
+        url = "https://www.linkedin.com/in/bob-builder/"
+        self._run(fake_session, [url])
+        self._run(fake_session, [url])
+        assert CampaignLead.objects.filter(
+            campaign=fake_session.campaign, lead__public_identifier="bob-builder"
+        ).count() == 1
+
+    def test_search_leads_appear_in_qualification_queue(self, fake_session):
+        self._run(fake_session, ["https://www.linkedin.com/in/bob-builder/"])
+        leads = get_leads_for_qualification(fake_session)
+        assert any(l["public_identifier"] == "bob-builder" for l in leads)
+
+    def test_search_lead_priority_lower_than_connection(self, fake_session):
+        from crm.models import CampaignLead, Lead
+        self._run(fake_session, ["https://www.linkedin.com/in/bob-builder/"])
+        connection_lead = Lead.objects.create(
+            public_identifier="warm-conn",
+            linkedin_url="https://www.linkedin.com/in/warm-conn/",
+        )
+        CampaignLead.objects.create(
+            campaign=fake_session.campaign,
+            lead=connection_lead,
+            source=CampaignLead.Source.LINKEDIN_CONNECTION,
+            relationship_status=CampaignLead.RelationshipStatus.CONNECTED,
+            priority=10,
+        )
+        leads = get_leads_for_qualification(fake_session)
+        pids = [l["public_identifier"] for l in leads]
+        assert pids.index("warm-conn") < pids.index("bob-builder")

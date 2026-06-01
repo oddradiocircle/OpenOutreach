@@ -207,12 +207,28 @@ def discover_and_enrich(session, urls):
             logger.warning("Empty profile for %s — skipping", url)
             continue
 
-        if create_enriched_lead(session, url, profile) is not None:
+        lead_pk = create_enriched_lead(session, url, profile)
+        if lead_pk is not None:
+            _attach_search_campaign_lead(session.campaign, lead_pk)
             enriched += 1
 
         time.sleep(random.uniform(min_delay, max_delay))
 
     logger.info("Enriched %d/%d new profiles", enriched, len(new_urls))
+
+
+def _attach_search_campaign_lead(campaign, lead_pk: int):
+    from crm.models import CampaignLead
+
+    CampaignLead.objects.get_or_create(
+        campaign=campaign,
+        lead_id=lead_pk,
+        defaults={
+            "source": CampaignLead.Source.LINKEDIN_SEARCH,
+            "relationship_status": CampaignLead.RelationshipStatus.UNKNOWN,
+            "priority": 50,
+        },
+    )
 
 
 def _cache_urn_from_profile(lead, profile: Dict[str, Any]):
