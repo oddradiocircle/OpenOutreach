@@ -138,4 +138,6 @@
   - [ ] CLI `--feedback` flag triggers regeneration; omitting it retains
         original hard-reject behaviour
 
-- [ ] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Phase 4' (Protocol in workflow.md) (e33c885)
+
+## Phase 4: Message Rejection with Regeneration [checkpoint: e33c885]
