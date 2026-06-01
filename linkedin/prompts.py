@@ -52,9 +52,13 @@ def get_prompt(key: str, campaign=None) -> str:
       2. Global PromptTemplate row from the DB.
       3. Hardcoded fallback (.j2 file or inline constant).
     """
-    # Phase 2: campaign override (placeholder for wiring in Task 2.3)
     if campaign is not None:
-        pass  # will be filled in Phase 2
+        try:
+            from linkedin.models import CampaignPromptOverride
+            override = CampaignPromptOverride.objects.get(campaign=campaign, prompt_key=key)
+            return override.body
+        except Exception:
+            pass
 
     try:
         from linkedin.models import PromptTemplate
