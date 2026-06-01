@@ -76,11 +76,53 @@ class CampaignPromptOverrideInline(admin.TabularInline):
         return formset
 
 
+_PIPELINE_CONDITION_FIELDS = (
+    "follow_up_cooldown_hours",
+    "reengagement_greeting_days",
+    "gpr_qualification_threshold",
+    "connect_daily_limit",
+    "follow_up_daily_limit",
+    "check_pending_daily_cap",
+    "max_followups_without_reply",
+)
+
+
 @admin.register(Campaign)
 class CampaignAdmin(admin.ModelAdmin):
     list_display = ("name", "deal_pipeline", "require_message_approval", "booking_link")
     filter_horizontal = ("users",)
     inlines = [CampaignPromptOverrideInline]
+    fieldsets = (
+        (None, {
+            "fields": ("name", "users", "product_docs", "campaign_objective",
+                       "booking_link", "website_url", "require_message_approval"),
+        }),
+        ("Pipeline Conditions (overrides)", {
+            "classes": ("collapse",),
+            "fields": _PIPELINE_CONDITION_FIELDS,
+        }),
+    )
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        try:
+            from linkedin.models import SiteConfig
+            site = SiteConfig.load()
+        except Exception:
+            return form
+        hints = {
+            "follow_up_cooldown_hours": f"Global default: {site.follow_up_cooldown_hours} h",
+            "reengagement_greeting_days": f"Global default: {site.reengagement_greeting_days} days",
+            "gpr_qualification_threshold": f"Global default: {site.gpr_qualification_threshold}",
+            "connect_daily_limit": f"Global default: {site.connect_daily_limit}/day",
+            "follow_up_daily_limit": f"Global default: {site.follow_up_daily_limit}/day",
+            "check_pending_daily_cap": f"Global default: {site.check_pending_daily_cap}/day",
+            "max_followups_without_reply": f"Global default: {site.max_followups_without_reply}",
+        }
+        for field, hint in hints.items():
+            if field in form.base_fields:
+                form.base_fields[field].help_text = hint
+        return form
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
