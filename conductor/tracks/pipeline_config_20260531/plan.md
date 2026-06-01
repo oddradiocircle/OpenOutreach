@@ -45,7 +45,7 @@
   - [ ] Unique constraint on `(campaign, prompt_key)`
   - [ ] Write and run migration
 
-- [ ] Task 2.2: `CampaignPromptOverrideInline` in `CampaignAdmin`
+- [x] Task 2.2: `CampaignPromptOverrideInline` in `CampaignAdmin` (f42a1e6)
   - [ ] Tabular inline limited to existing prompt keys
   - [ ] Override `body` textarea shows current global prompt text as
         `help_text` (loaded dynamically from `PromptTemplate`)
