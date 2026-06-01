@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-## [ ] Track: Configurable Pipeline Prompts, Conditions & Message Regeneration
+## [x] Track: Configurable Pipeline Prompts, Conditions & Message Regeneration
 *Link: [./conductor/tracks/pipeline_config_20260531/](./conductor/tracks/pipeline_config_20260531/)*
