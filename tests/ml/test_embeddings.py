@@ -8,6 +8,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
+from linkedin.enums import ProfileState
+
 
 @pytest.mark.no_embed_mock
 class TestEmbedText:
@@ -127,6 +129,30 @@ class TestLeadEmbeddingFields:
 
         X, y = Lead.get_labeled_arrays(campaign)
         assert len(X) == 0
+
+    @pytest.mark.parametrize("state", [ProfileState.CONNECTED, ProfileState.COMPLETED])
+    def test_get_labeled_arrays_wrong_fit_negative_in_terminal_states(self, fake_session, state):
+        """wrong_fit feedback remains a negative label outside FAILED state."""
+        from crm.models import Deal, Lead, Outcome
+
+        campaign = fake_session.campaign
+        emb = np.random.randn(384).astype(np.float32)
+        lead = Lead.objects.create(
+            linkedin_url=f"https://linkedin.com/in/{state.value.lower().replace(' ', '-')}/",
+            public_identifier=state.value.lower().replace(" ", "-"),
+            embedding=emb.tobytes(),
+        )
+        Deal.objects.create(
+            lead=lead,
+            campaign=campaign,
+            state=state,
+            outcome=Outcome.WRONG_FIT,
+        )
+
+        X, y = Lead.get_labeled_arrays(campaign)
+
+        assert len(X) == 1
+        assert y.tolist() == [0]
 
     def test_embedded_lead_ids(self, db):
         from crm.models import Lead

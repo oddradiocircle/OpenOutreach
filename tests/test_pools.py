@@ -8,6 +8,7 @@ from linkedin.ml.qualifier import BayesianQualifier
 from linkedin.pipeline.pools import (
     find_candidate,
     _needs_search,
+    _run_preconnect_qualification_guard,
     search_source,
     qualify_source,
     ready_source,
@@ -236,6 +237,51 @@ class TestGetCandidate:
             patch("linkedin.pipeline.pools.run_qualification", return_value="alice"),
         ):
             assert find_candidate(fake_session, scorer) == candidate
+
+
+class TestPreconnectQualificationGuard:
+    def test_runs_bounded_batch_until_min_observations(self, fake_session):
+        from types import SimpleNamespace
+
+        scorer = MagicMock()
+        scorer.n_obs = 0
+        cfg = SimpleNamespace(
+            min_qualification_observations_before_connect=5,
+            preconnect_qualification_batch_size=2,
+        )
+        candidates = [_make_candidate(1, np.zeros(384, dtype=np.float32))]
+
+        def qualify_once(session, qualifier):
+            qualifier.n_obs += 1
+            return f"lead-{qualifier.n_obs}"
+
+        with (
+            patch("linkedin.pipeline.pools.fetch_qualification_candidates", return_value=candidates) as mock_fetch,
+            patch("linkedin.pipeline.pools.run_qualification", side_effect=qualify_once) as mock_run,
+        ):
+            assert _run_preconnect_qualification_guard(fake_session, scorer, cfg) == 2
+
+        assert scorer.n_obs == 2
+        assert mock_fetch.call_count == 2
+        assert mock_run.call_count == 2
+
+    def test_stops_when_no_qualification_candidates(self, fake_session):
+        from types import SimpleNamespace
+
+        scorer = MagicMock()
+        scorer.n_obs = 0
+        cfg = SimpleNamespace(
+            min_qualification_observations_before_connect=5,
+            preconnect_qualification_batch_size=3,
+        )
+
+        with (
+            patch("linkedin.pipeline.pools.fetch_qualification_candidates", return_value=[]),
+            patch("linkedin.pipeline.pools.run_qualification") as mock_run,
+        ):
+            assert _run_preconnect_qualification_guard(fake_session, scorer, cfg) == 0
+
+        mock_run.assert_not_called()
 
     def test_exhausted_returns_none(self, fake_session):
         scorer = BayesianQualifier(seed=42)
