@@ -109,7 +109,7 @@
 
 ## Phase 4: Message Rejection with Regeneration
 
-- [ ] Task 4.1: `Deal` model fields
+- [x] Task 4.1: `Deal` model fields (9cdc777)
   - [ ] Add `rejection_feedback` (TextField, blank=True, null=True)
   - [ ] Add `regeneration_count` (IntegerField, default=0)
   - [ ] Write and run migration
