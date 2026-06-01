@@ -38,6 +38,15 @@ class SiteConfig(models.Model):
     ai_model = models.CharField(max_length=200, blank=True, default="")
     llm_api_base = models.CharField(max_length=500, blank=True, default="")
 
+    # Pipeline condition defaults
+    follow_up_cooldown_hours = models.PositiveIntegerField(default=72)
+    reengagement_greeting_days = models.PositiveIntegerField(default=3)
+    gpr_qualification_threshold = models.FloatField(default=0.85)
+    connect_daily_limit = models.PositiveIntegerField(default=20)
+    follow_up_daily_limit = models.PositiveIntegerField(default=25)
+    check_pending_daily_cap = models.PositiveIntegerField(default=100)
+    max_followups_without_reply = models.PositiveIntegerField(default=10)
+
     class Meta:
         app_label = "linkedin"
         verbose_name = "Site Configuration"
